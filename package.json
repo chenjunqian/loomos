@@ -1,10 +1,9 @@
 {
-  "name": "my-app",
+  "name": "loomos",
   "scripts": {
     "dev": "bun run --hot src/index.ts",
     "build": "bun build src/index.ts",
-    "start": "bun run dist/index.js",
-    "prod": "bun run dist/index.js"
+    "start": "bun run dist/index.js"
   },
   "dependencies": {
     "hono": "^4.11.5"
