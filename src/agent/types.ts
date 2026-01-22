@@ -1,0 +1,98 @@
+export enum MessageRole {
+    System = 'system',
+    User = 'user',
+    Assistant = 'assistant',
+    Tool = 'tool',
+}
+
+export interface Message {
+    role: MessageRole
+    content: string
+    name?: string
+    tool_calls?: ToolCall[]
+    tool_call_id?: string
+}
+
+export interface ToolCall {
+    id: string
+    type: 'function'
+    function: {
+        name: string
+        arguments: string
+    }
+}
+
+export interface Tool {
+    name: string
+    description: string
+    parameters: {
+        type: 'object'
+        properties: Record<string, ToolParameter>
+        required: string[]
+    }
+}
+
+export interface ToolParameter {
+    type: string
+    description: string
+    enum?: string[]
+}
+
+export interface ToolResult {
+    success: boolean
+    content: string
+    error?: string
+}
+
+export interface ToolExecution {
+    toolName: string
+    arguments: Record<string, unknown>
+    result: ToolResult
+}
+
+export enum AgentStatus {
+    Idle = 'idle',
+    Thinking = 'thinking',
+    AwaitingAction = 'awaiting_action',
+    AwaitingConfirmation = 'awaiting_confirmation',
+    Executing = 'executing',
+    Completed = 'completed',
+    Error = 'error',
+}
+
+export interface AgentState {
+    status: AgentStatus
+    messages: Message[]
+    history: AgentHistoryEntry[]
+    currentIteration: number
+    uncertaintyLevel: number
+    requiresHumanConfirmation: boolean
+    pendingToolCall?: ToolCall
+}
+
+export interface AgentHistoryEntry {
+    iteration: number
+    reasoning: string
+    action: string
+    result: string
+    uncertaintyDetected: boolean
+    timestamp: number
+}
+
+export interface AgentInput {
+    task: string
+    context?: Record<string, unknown>
+}
+
+export interface AgentOutput {
+    response: string
+    status: AgentStatus
+    history: AgentHistoryEntry[]
+    requiresConfirmation: boolean
+}
+
+export interface LLMResponse {
+    content: string
+    toolCalls?: ToolCall[]
+    finishReason: 'stop' | 'tool_calls' | 'length' | 'content_filter' | 'error'
+}

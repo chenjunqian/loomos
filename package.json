@@ -6,6 +6,7 @@
     "start": "bun run dist/index.js"
   },
   "dependencies": {
+    "@dotenvx/dotenvx": "^1.51.4",
     "hono": "^4.11.5"
   },
   "devDependencies": {
