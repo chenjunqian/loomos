@@ -115,7 +115,7 @@ function createAgent(): Agent {
         const matches = uncertaintyIndicators.filter((r) => r.test(content)).length
         state.uncertaintyLevel = matches / uncertaintyIndicators.length
 
-        return state.uncertaintyLevel >= config.temperature
+        return state.uncertaintyLevel >= config.uncertainThreshold
     }
 
     const isHighRiskError = (error: string): boolean => {

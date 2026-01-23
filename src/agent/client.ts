@@ -6,7 +6,6 @@ function createLLMClient() {
     const apiKey = config.apiKey
     const model = config.model
     const timeout = config.timeout
-    const temperature = config.temperature
 
     async function chat(messages: Message[], maxTokens?: number): Promise<LLMResponse> {
         const url = `${baseUrl}/chat/completions`
@@ -18,7 +17,7 @@ function createLLMClient() {
                 content: m.content,
                 name: m.name,
             })),
-            temperature: temperature,
+            temperature: 0.1,
         }
 
         if (maxTokens) {
