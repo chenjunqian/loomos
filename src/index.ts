@@ -2,12 +2,16 @@ import { Hono } from 'hono'
 import { createAgent, availableTools } from './agent'
 import { getTaskRecord } from './database/db'
 import { AgentInput } from './agent/types'
+import { queueApp } from './queue/routes'
+import { workerPool } from './queue/worker-pool'
 
 const app = new Hono()
 
+app.route('/queue', queueApp)
+
 // Health check
 app.get('/', (c) => {
-    return c.text('Loomos Agent API - Use /agent/* endpoints')
+    return c.text('Loomos Agent API - Use /agent/* or /queue/* endpoints')
 })
 
 // Run an agent task
@@ -90,5 +94,7 @@ app.get('/agent/state', async (c) => {
 app.get('/agent/tools', (c) => {
     return c.json(availableTools)
 })
+
+workerPool.start().catch(console.error)
 
 export default app
