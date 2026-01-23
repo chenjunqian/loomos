@@ -1,6 +1,6 @@
 import { config } from './config'
 import { createSystemPrompt } from './prompt'
-import { llmClient } from './client'
+import { createLLMClientFromInput } from './client'
 import {
     ToolCall,
     ToolResult,
@@ -11,6 +11,7 @@ import {
     AgentHistoryEntry,
     LLMResponse,
     MessageRole,
+    ThinkingMode,
 } from './types'
 import { allTools, toolHandlers, validateToolCall } from './tools'
 
@@ -20,8 +21,13 @@ interface Agent {
     confirmAction: (approved: boolean, alternativeInput?: string) => Promise<AgentOutput>
 }
 
-function createAgent(): Agent {
-    // Private state encapsulated in closure
+function createAgent(input?: AgentInput): Agent {
+    const effectiveInput = input || { task: '' }
+    const thinkingMode: ThinkingMode = effectiveInput.thinkingMode || 'auto'
+    const effectiveMaxIterations = effectiveInput.maxIterations || config.maxIterations
+    const llmClient = createLLMClientFromInput(effectiveInput)
+    const systemPrompt = createSystemPrompt(allTools, thinkingMode)
+
     let state: AgentState = {
         status: AgentStatus.Idle,
         messages: [],
@@ -30,9 +36,7 @@ function createAgent(): Agent {
         uncertaintyLevel: 0,
         requiresHumanConfirmation: false,
     }
-    const systemPrompt = createSystemPrompt(allTools)
 
-    // Private helper functions
     const resetState = (): void => {
         state = {
             status: AgentStatus.Idle,
@@ -45,7 +49,7 @@ function createAgent(): Agent {
     }
 
     const think = async (): Promise<LLMResponse> => {
-        state.status = AgentStatus.Thinking
+        state.status = thinkingMode !== 'disabled' ? AgentStatus.Thinking : AgentStatus.Executing
         return llmClient.chat(state.messages)
     }
 
@@ -87,6 +91,10 @@ function createAgent(): Agent {
     }
 
     const extractReasoning = (): string => {
+        if (thinkingMode === 'disabled') {
+            return ''
+        }
+
         const lastAssistantMsg = state.messages.filter((m) => m.role === 'assistant').pop()
         if (!lastAssistantMsg?.content) return ''
 
@@ -132,14 +140,14 @@ function createAgent(): Agent {
 
     const run = async (input: AgentInput): Promise<AgentOutput> => {
         resetState()
-        state.status = AgentStatus.Thinking
+        state.status = thinkingMode !== 'disabled' ? AgentStatus.Thinking : AgentStatus.Executing
 
         state.messages = [
             { role: MessageRole.System, content: systemPrompt },
             { role: MessageRole.User, content: input.task },
         ]
 
-        while (state.currentIteration < config.maxIterations) {
+        while (state.currentIteration < effectiveMaxIterations) {
             try {
                 const response = await think()
 

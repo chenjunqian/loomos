@@ -79,9 +79,32 @@ export interface AgentHistoryEntry {
     timestamp: number
 }
 
+export type ThinkingMode = 'auto' | 'enabled' | 'disabled'
+
 export interface AgentInput {
     task: string
     context?: Record<string, unknown>
+    maxIterations?: number
+    thinkingMode?: ThinkingMode
+    apiKey?: string
+    baseUrl?: string
+    model?: string
+    approved?: boolean
+    alternativeInput?: string
+    userId?: string
+    taskId?: string
+}
+
+export interface TaskRecord {
+    id: string
+    userId: string
+    task: string
+    status: AgentStatus
+    response?: string
+    history: AgentHistoryEntry[]
+    requiresConfirmation: boolean
+    createdAt: Date
+    updatedAt: Date
 }
 
 export interface AgentOutput {

@@ -1,11 +1,18 @@
 import { config } from './config'
-import { Message, LLMResponse } from './types'
+import { Message, LLMResponse, AgentInput } from './types'
 
-function createLLMClient() {
-    const baseUrl = config.baseUrl
-    const apiKey = config.apiKey
-    const model = config.model
-    const timeout = config.timeout
+interface LLMClientConfig {
+    apiKey?: string
+    baseUrl?: string
+    model?: string
+    timeout?: number
+}
+
+function createLLMClient(overrides?: LLMClientConfig) {
+    const baseUrl = overrides?.baseUrl || config.baseUrl
+    const apiKey = overrides?.apiKey || config.apiKey
+    const model = overrides?.model || config.model
+    const timeout = overrides?.timeout || config.timeout
 
     async function chat(messages: Message[], maxTokens?: number): Promise<LLMResponse> {
         const url = `${baseUrl}/chat/completions`
@@ -168,4 +175,13 @@ function createLLMClient() {
     }
 }
 
+function createLLMClientFromInput(input: AgentInput): ReturnType<typeof createLLMClient> {
+    return createLLMClient({
+        apiKey: input.apiKey,
+        baseUrl: input.baseUrl,
+        model: input.model,
+    })
+}
+
 export const llmClient = createLLMClient()
+export { createLLMClient, createLLMClientFromInput }
