@@ -1,24 +1,17 @@
 import { config } from './config'
 import { Message, LLMResponse } from './types'
 
-export class LLMClient {
-    private baseUrl: string
-    private apiKey: string
-    private model: string
-    private timeout: number
+function createLLMClient() {
+    const baseUrl = config.baseUrl
+    const apiKey = config.apiKey
+    const model = config.model
+    const timeout = config.timeout
 
-    constructor() {
-        this.baseUrl = config.baseUrl
-        this.apiKey = config.apiKey
-        this.model = config.model
-        this.timeout = config.timeout
-    }
-
-    async chat(messages: Message[], maxTokens?: number): Promise<LLMResponse> {
-        const url = `${this.baseUrl}/chat/completions`
+    async function chat(messages: Message[], maxTokens?: number): Promise<LLMResponse> {
+        const url = `${baseUrl}/chat/completions`
 
         const body: Record<string, unknown> = {
-            model: this.model,
+            model: model,
             messages: messages.map((m) => ({
                 role: m.role,
                 content: m.content,
@@ -32,14 +25,14 @@ export class LLMClient {
         }
 
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+        const timeoutId = setTimeout(() => controller.abort(), timeout)
 
         try {
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${this.apiKey}`,
+                    Authorization: `Bearer ${apiKey}`,
                 },
                 body: JSON.stringify(body),
                 signal: controller.signal,
@@ -76,22 +69,22 @@ export class LLMClient {
         } catch (error) {
             clearTimeout(timeoutId)
             if (error instanceof Error && error.name === 'AbortError') {
-                throw new Error(`Request timeout after ${this.timeout}ms`)
+                throw new Error(`Request timeout after ${timeout}ms`)
             }
             throw error
         }
     }
 
-    async streamChat(
+    async function streamChat(
         messages: Message[],
         onChunk: (chunk: string) => void,
         onComplete: () => void,
         onError: (error: Error) => void
     ): Promise<void> {
-        const url = `${this.baseUrl}/chat/completions`
+        const url = `${baseUrl}/chat/completions`
 
         const body = {
-            model: this.model,
+            model: model,
             messages: messages.map((m) => ({
                 role: m.role,
                 content: m.content,
@@ -101,14 +94,14 @@ export class LLMClient {
         }
 
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+        const timeoutId = setTimeout(() => controller.abort(), timeout)
 
         try {
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${this.apiKey}`,
+                    Authorization: `Bearer ${apiKey}`,
                 },
                 body: JSON.stringify(body),
                 signal: controller.signal,
@@ -162,12 +155,17 @@ export class LLMClient {
         } catch (error) {
             clearTimeout(timeoutId)
             if (error instanceof Error && error.name === 'AbortError') {
-                onError(new Error(`Request timeout after ${this.timeout}ms`))
+                onError(new Error(`Request timeout after ${timeout}ms`))
             } else {
                 onError(error instanceof Error ? error : new Error('Unknown error'))
             }
         }
     }
+
+    return {
+        chat,
+        streamChat,
+    }
 }
 
-export const llmClient = new LLMClient()
+export const llmClient = createLLMClient()
