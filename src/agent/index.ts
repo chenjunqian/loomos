@@ -249,4 +249,4 @@ function createAgent(input?: AgentInput): Agent {
     }
 }
 
-export { createAgent, allTools as availableTools, AgentInput }
+export { createAgent, allTools as availableTools }

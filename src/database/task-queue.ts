@@ -167,4 +167,4 @@ export async function getTaskStats(): Promise<{
     return { pending, processing, completed, failed }
 }
 
-export { prisma, TaskQueue }
+export { prisma }

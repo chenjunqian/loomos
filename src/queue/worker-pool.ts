@@ -3,9 +3,10 @@ import {
     claimTask,
     completeTask,
     recoverStaleTasks,
-    TaskQueue,
-} from '../database/task-queue.js'
-import { createAgent, AgentInput } from '../agent/index.js'
+} from '../database/task-queue'
+import { createAgent } from '../agent/index.js'
+import { AgentInput } from '../agent/types'
+import { TaskQueue } from '@prisma/client'
 
 const provider = process.env.DATABASE_PROVIDER || 'sqlite'
 const isSQLite = provider === 'sqlite'
