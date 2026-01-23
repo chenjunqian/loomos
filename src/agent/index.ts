@@ -1,4 +1,4 @@
-import { config, getAgentConfig } from './config'
+import { config } from './config'
 import { createSystemPrompt } from './prompt'
 import { llmClient } from './client'
 import {
@@ -115,7 +115,7 @@ function createAgent(): Agent {
         const matches = uncertaintyIndicators.filter((r) => r.test(content)).length
         state.uncertaintyLevel = matches / uncertaintyIndicators.length
 
-        return state.uncertaintyLevel >= config.uncertaintyThreshold
+        return state.uncertaintyLevel >= config.temperature
     }
 
     const isHighRiskError = (error: string): boolean => {
