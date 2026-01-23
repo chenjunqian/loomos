@@ -7,9 +7,11 @@
   },
   "dependencies": {
     "@dotenvx/dotenvx": "^1.51.4",
+    "@prisma/client": "5.22.0",
     "hono": "^4.11.5"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "prisma": "5.22.0"
   }
 }
