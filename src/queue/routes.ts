@@ -6,12 +6,12 @@ export const queueApp = new Hono()
 queueApp.post('/tasks', async (c) => {
     const body = await c.req.json()
 
-    if (!body.task || !body.userId) {
+    if (!body.taskId || !body.userId) {
         return c.json({ error: 'task and userId are required' }, 400)
     }
 
     const task = await createTask({
-        task: body.task,
+        taskRecordId: body.taskId,
         userId: body.userId,
         priority: body.priority ?? 0,
         maxAttempts: body.maxAttempts ?? 3,

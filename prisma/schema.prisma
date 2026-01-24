@@ -16,20 +16,67 @@ model User {
 }
 
 model TaskQueue {
-  id          String   @id @default(uuid())
-  userId      String
-  task        String
-  status      String   @default("pending")
-  priority    Int      @default(0)
-  workerId    String?
-  attempts    Int      @default(0)
-  maxAttempts Int      @default(3)
-  error       String?
-  startedAt   DateTime?
-  completedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(uuid())
+  userId        String
+  taskRecordId  String
+  status        String   @default("pending")
+  priority      Int      @default(0)
+  workerId      String?
+  attempts      Int      @default(0)
+  maxAttempts   Int      @default(3)
+  error         String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([status, priority, createdAt])
+  @@index([userId, taskRecordId, status])
+}
+
+model TaskRecord {
+  id                   String   @id @default(uuid())
+  userId               String
+  task                 String
+  status               String   @default("pending")
+  response             String?
+  requiresConfirmation Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  contexts             TaskContext[]
+  history              TaskHistory[]
+
+  @@index([userId, id])
   @@index([userId, status])
+}
+
+model TaskContext {
+  id           String   @id @default(uuid())
+  taskRecordId String
+  key          String
+  value        String
+  createdAt    DateTime @default(now())
+
+  taskRecord   TaskRecord @relation(fields: [taskRecordId], references: [id], onDelete: Cascade)
+
+  @@index([taskRecordId])
+  @@unique([taskRecordId, key])
+}
+
+model TaskHistory {
+  id                String   @id @default(uuid())
+  taskRecordId      String
+  iteration         Int
+  reasoning         String
+  action            String
+  result            String
+  uncertaintyDetected Boolean @default(false)
+  timestamp         Int
+  createdAt         DateTime @default(now())
+
+  taskRecord        TaskRecord @relation(fields: [taskRecordId], references: [id], onDelete: Cascade)
+
+  @@index([taskRecordId])
+  @@unique([taskRecordId, iteration])
 }

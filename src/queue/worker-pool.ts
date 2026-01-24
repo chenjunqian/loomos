@@ -3,9 +3,11 @@ import {
     claimTask,
     completeTask,
     recoverStaleTasks,
+    prisma,
 } from '../database/task-queue'
-import { createAgent } from '../agent/index.js'
-import { AgentInput } from '../agent/types'
+import { getTaskRecord, updateTaskRecord } from '../database/task-record'
+import { createAgent } from '../agent'
+import { AgentInput, AgentStatus } from '../agent/types'
 import { TaskQueue } from '@prisma/client'
 
 const provider = process.env.DATABASE_PROVIDER || 'sqlite'
@@ -24,20 +26,52 @@ const processTask = async (
     }
 ): Promise<void> => {
     try {
+        const existingRecord = await getTaskRecord(task.userId, task.taskRecordId)
+
+        let context: Record<string, unknown> | undefined
+        if (existingRecord) {
+            context = {}
+            for (const ctx of await prisma.taskContext.findMany({
+                where: { taskRecordId: task.taskRecordId },
+            })) {
+                try {
+                    context[ctx.key] = JSON.parse(ctx.value)
+                } catch {
+                    context[ctx.key] = ctx.value
+                }
+            }
+        }
+
+        const taskDescription = existingRecord?.task || ''
+
         const input: AgentInput = {
-            task: task.task,
+            task: taskDescription,
             userId: task.userId,
-            taskId: task.id,
+            taskId: task.taskRecordId,
+            context,
+            maxIterations: 20,
+            thinkingMode: 'auto',
         }
 
         const agent = createAgent(input)
-        await agent.run(input)
+        const result = await agent.run(input)
+
+        await updateTaskRecord(task.taskRecordId, {
+            status: result.status,
+            response: result.response,
+            history: result.history,
+            requiresConfirmation: result.requiresConfirmation,
+        })
 
         await completeTask(task.id, true)
         callbacks.onTaskComplete(task, true)
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         console.error(`[WorkerPool] Task ${task.id} failed:`, errorMessage)
+
+        await updateTaskRecord(task.id, {
+            status: 'error' as AgentStatus,
+        })
 
         await completeTask(task.id, false, errorMessage)
         callbacks.onTaskComplete(task, false, errorMessage)

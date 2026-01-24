@@ -13,7 +13,7 @@ export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS]
 
 export interface CreateTaskInput {
     userId: string
-    task: string
+    taskRecordId: string
     priority?: number
     maxAttempts?: number
 }
@@ -26,7 +26,7 @@ export async function createTask(input: CreateTaskInput): Promise<TaskQueue> {
     return await prisma.taskQueue.create({
         data: {
             userId: input.userId,
-            task: input.task,
+            taskRecordId: input.taskRecordId,
             priority: input.priority ?? 0,
             maxAttempts: input.maxAttempts ?? 3,
             status: TASK_STATUS.PENDING,
