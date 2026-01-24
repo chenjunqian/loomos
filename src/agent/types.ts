@@ -71,7 +71,7 @@ export interface AgentState {
 }
 
 export interface AgentHistoryEntry {
-    role: 'user' | 'assistant' | 'tool'
+    role: MessageRole
     content: string
     iteration?: number
     timestamp: number

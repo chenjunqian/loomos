@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { availableTools } from './index.js'
 import { getTaskRecord, saveTaskRecord } from '../database/task-record.js'
 import { createTask, getPendingTasks, completeTask, prisma } from '../database/task-queue.js'
-import { AgentInput, AgentStatus } from './types.js'
+import { AgentInput, AgentStatus, MessageRole } from './types.js'
 
 export const agentApp = new Hono()
 
@@ -23,7 +23,7 @@ agentApp.post('/run', async (c) => {
                 id: taskId,
                 userId,
                 task: body.task,
-                role: 'user',
+                role: MessageRole.User,
                 status: AgentStatus.Idle,
             })
         } else {
@@ -31,7 +31,7 @@ agentApp.post('/run', async (c) => {
                 id: taskId,
                 userId,
                 task: body.task,
-                role: 'user',
+                role: MessageRole.User,
                 status: AgentStatus.Idle,
             })
         }
@@ -98,7 +98,7 @@ agentApp.post('/confirm', async (c) => {
             id: taskId,
             userId,
             task: task,
-            role: 'user',
+            role: MessageRole.User,
             status: AgentStatus.Idle,
         })
 

@@ -79,11 +79,9 @@ function createAgent(input?: AgentInput): Agent {
 
         const entry: AgentHistoryEntry = {
             iteration: state.currentIteration,
-            reasoning: extractReasoning(),
-            action: `${toolCall.function.name}(${JSON.stringify(args)})`,
-            result: result.success ? 'Success' : `Error: ${result.error}`,
-            uncertaintyDetected: false,
+            content: result.content,
             timestamp: Date.now(),
+            role: MessageRole.System
         }
         state.history.push(entry)
 
