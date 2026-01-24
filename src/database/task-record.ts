@@ -5,7 +5,7 @@ export interface CreateTaskRecordInput {
     id?: string
     userId: string
     task: string
-    context?: Record<string, unknown>
+    role: string
     status?: AgentStatus
 }
 
@@ -23,32 +23,23 @@ export async function getTaskRecord(
     const record = await prisma.taskRecord.findUnique({
         where: { id: taskId, userId },
         include: {
-            contexts: true,
-            history: true,
+            history: {
+                orderBy: { createdAt: 'asc' },
+            },
         },
     })
 
     if (!record) return null
 
-    const context: Record<string, unknown> = {}
-    for (const ctx of record.contexts) {
-        try {
-            context[ctx.key] = JSON.parse(ctx.value)
-        } catch {
-            context[ctx.key] = ctx.value
-        }
+    const history: AgentHistoryEntry[] = []
+    for (const entry of record.history) {
+        history.push({
+            role: entry.role as AgentHistoryEntry['role'],
+            content: entry.content,
+            iteration: entry.iteration ?? undefined,
+            timestamp: entry.createdAt.getTime(),
+        })
     }
-
-    const history: AgentHistoryEntry[] = record.history
-        .sort((a, b) => a.iteration - b.iteration)
-        .map((h) => ({
-            iteration: h.iteration,
-            reasoning: h.reasoning,
-            action: h.action,
-            result: h.result,
-            uncertaintyDetected: h.uncertaintyDetected,
-            timestamp: h.timestamp,
-        }))
 
     return {
         id: record.id,
@@ -78,24 +69,6 @@ export async function saveTaskRecord(input: CreateTaskRecordInput): Promise<Task
             requiresConfirmation: false,
         },
     })
-
-    if (input.context) {
-        await prisma.taskContext.deleteMany({
-            where: { taskRecordId: taskRecord.id },
-        })
-
-        const contextEntries = Object.entries(input.context).map(([key, value]) => ({
-            taskRecordId: taskRecord.id,
-            key,
-            value: JSON.stringify(value),
-        }))
-
-        if (contextEntries.length > 0) {
-            await prisma.taskContext.createMany({
-                data: contextEntries,
-            })
-        }
-    }
 
     return {
         id: taskRecord.id,
@@ -138,12 +111,9 @@ export async function updateTaskRecord(
         if (updates.history.length > 0) {
             const historyEntries = updates.history.map((h) => ({
                 taskRecordId: taskId,
-                iteration: h.iteration,
-                reasoning: h.reasoning,
-                action: h.action,
-                result: h.result,
-                uncertaintyDetected: h.uncertaintyDetected,
-                timestamp: h.timestamp,
+                role: h.role,
+                content: h.content,
+                iteration: h.iteration ?? null,
             }))
 
             await prisma.taskHistory.createMany({
@@ -163,32 +133,24 @@ export async function getPendingConfirmations(
             status: 'awaiting_confirmation',
         },
         include: {
-            contexts: true,
-            history: true,
+            history: {
+                orderBy: { createdAt: 'asc' },
+            },
         },
         orderBy: { createdAt: 'asc' },
     })
 
     return records.map((record) => {
-        const context: Record<string, unknown> = {}
-        for (const ctx of record.contexts) {
-            try {
-                context[ctx.key] = JSON.parse(ctx.value)
-            } catch {
-                context[ctx.key] = ctx.value
-            }
-        }
+        const history: AgentHistoryEntry[] = []
 
-        const history: AgentHistoryEntry[] = record.history
-            .sort((a, b) => a.iteration - b.iteration)
-            .map((h) => ({
-                iteration: h.iteration,
-                reasoning: h.reasoning,
-                action: h.action,
-                result: h.result,
-                uncertaintyDetected: h.uncertaintyDetected,
-                timestamp: h.timestamp,
-            }))
+        for (const entry of record.history) {
+            history.push({
+                role: entry.role as AgentHistoryEntry['role'],
+                content: entry.content,
+                iteration: entry.iteration ?? undefined,
+                timestamp: entry.createdAt.getTime(),
+            })
+        }
 
         return {
             id: record.id,

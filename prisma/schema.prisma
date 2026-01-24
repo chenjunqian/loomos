@@ -44,39 +44,22 @@ model TaskRecord {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  contexts             TaskContext[]
   history              TaskHistory[]
 
   @@index([userId, id])
   @@index([userId, status])
 }
 
-model TaskContext {
+model TaskHistory {
   id           String   @id @default(uuid())
   taskRecordId String
-  key          String
-  value        String
+  role         String
+  content      String
+  iteration    Int?
   createdAt    DateTime @default(now())
 
   taskRecord   TaskRecord @relation(fields: [taskRecordId], references: [id], onDelete: Cascade)
 
-  @@index([taskRecordId])
-  @@unique([taskRecordId, key])
-}
-
-model TaskHistory {
-  id                String   @id @default(uuid())
-  taskRecordId      String
-  iteration         Int
-  reasoning         String
-  action            String
-  result            String
-  uncertaintyDetected Boolean @default(false)
-  timestamp         Int
-  createdAt         DateTime @default(now())
-
-  taskRecord        TaskRecord @relation(fields: [taskRecordId], references: [id], onDelete: Cascade)
-
-  @@index([taskRecordId])
-  @@unique([taskRecordId, iteration])
+  @@index([taskRecordId, createdAt])
+  @@index([taskRecordId, role])
 }

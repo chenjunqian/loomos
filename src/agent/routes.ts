@@ -23,7 +23,7 @@ agentApp.post('/run', async (c) => {
                 id: taskId,
                 userId,
                 task: body.task,
-                context: body.context,
+                role: 'user',
                 status: AgentStatus.Idle,
             })
         } else {
@@ -31,7 +31,7 @@ agentApp.post('/run', async (c) => {
                 id: taskId,
                 userId,
                 task: body.task,
-                context: body.context,
+                role: 'user',
                 status: AgentStatus.Idle,
             })
         }
@@ -77,7 +77,7 @@ agentApp.post('/confirm', async (c) => {
             return c.json({ error: 'Task record not found' }, 404)
         }
 
-        const taskDescription = body.task || existingRecord.task
+        const task = body.task || existingRecord.task
 
         if (approved === false) {
             const previousQueue = await prisma.taskQueue.findFirst({
@@ -97,8 +97,8 @@ agentApp.post('/confirm', async (c) => {
         await saveTaskRecord({
             id: taskId,
             userId,
-            task: taskDescription,
-            context: body.context,
+            task: task,
+            role: 'user',
             status: AgentStatus.Idle,
         })
 

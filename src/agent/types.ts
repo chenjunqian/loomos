@@ -71,28 +71,25 @@ export interface AgentState {
 }
 
 export interface AgentHistoryEntry {
-    iteration: number
-    reasoning: string
-    action: string
-    result: string
-    uncertaintyDetected: boolean
+    role: 'user' | 'assistant' | 'tool'
+    content: string
+    iteration?: number
     timestamp: number
 }
 
 export type ThinkingMode = 'auto' | 'enabled' | 'disabled'
 
 export interface AgentInput {
+    userId?: string
+    taskId?: string
     task: string
-    context?: Record<string, unknown>
+    approved?: boolean
+    alternativeInput?: string
     maxIterations?: number
     thinkingMode?: ThinkingMode
     apiKey?: string
     baseUrl?: string
     model?: string
-    approved?: boolean
-    alternativeInput?: string
-    userId?: string
-    taskId?: string
 }
 
 export interface TaskRecord {

@@ -3,7 +3,6 @@ import {
     claimTask,
     completeTask,
     recoverStaleTasks,
-    prisma,
 } from '../database/task-queue'
 import { getTaskRecord, updateTaskRecord } from '../database/task-record'
 import { createAgent } from '../agent'
@@ -27,28 +26,11 @@ const processTask = async (
 ): Promise<void> => {
     try {
         const existingRecord = await getTaskRecord(task.userId, task.taskRecordId)
-
-        let context: Record<string, unknown> | undefined
-        if (existingRecord) {
-            context = {}
-            for (const ctx of await prisma.taskContext.findMany({
-                where: { taskRecordId: task.taskRecordId },
-            })) {
-                try {
-                    context[ctx.key] = JSON.parse(ctx.value)
-                } catch {
-                    context[ctx.key] = ctx.value
-                }
-            }
-        }
-
         const taskDescription = existingRecord?.task || ''
-
         const input: AgentInput = {
             task: taskDescription,
             userId: task.userId,
             taskId: task.taskRecordId,
-            context,
             maxIterations: 20,
             thinkingMode: 'auto',
         }
