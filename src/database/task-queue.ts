@@ -34,8 +34,16 @@ export async function createTask(input: CreateTaskInput): Promise<TaskQueue> {
     })
 }
 
+function getDatabaseProvider(): string {
+    const url = process.env.DATABASE_URL || 'file:./dev.db'
+    if (url.includes('postgresql:') || url.includes('postgres:')) {
+        return 'postgresql'
+    }
+    return 'sqlite'
+}
+
 export async function claimTask(workerId: string): Promise<TaskQueue | null> {
-    const provider = process.env.DATABASE_PROVIDER || 'sqlite'
+    const provider = getDatabaseProvider()
 
     if (provider === 'postgresql') {
         return await claimTaskPostgreSQL(workerId)
