@@ -12,7 +12,6 @@ export interface CreateTaskRecordInput {
 export interface UpdateTaskRecordInput {
     status?: AgentStatus
     response?: string
-    history?: AgentHistoryEntry[]
     requiresConfirmation?: boolean
 }
 
@@ -105,25 +104,21 @@ export async function updateTaskRecord(
         where: { id: taskId },
         data,
     })
+}
 
-    if (updates.history !== undefined && updates.history !== null && updates.history.length > 0) {
-        await prisma.taskHistory.deleteMany({
-            where: { taskRecordId: taskId },
-        })
-
-        if (updates.history.length > 0) {
-            const historyEntries = updates.history.map((h) => ({
-                taskRecordId: taskId,
-                role: h.role,
-                content: h.content,
-                iteration: h.iteration ?? null,
-            }))
-
-            await prisma.taskHistory.createMany({
-                data: historyEntries,
-            })
-        }
-    }
+export async function saveTaskHistory(
+    taskRecordId: string,
+    entry: AgentHistoryEntry
+): Promise<void> {
+    await prisma.taskHistory.create({
+        data: {
+            taskRecordId,
+            role: entry.role,
+            content: entry.content,
+            iteration: entry.iteration ?? null,
+            createdAt: new Date(entry.timestamp),
+        },
+    })
 }
 
 export async function getPendingConfirmations(

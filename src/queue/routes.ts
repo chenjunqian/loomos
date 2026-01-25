@@ -4,14 +4,23 @@ import { getTaskById, getTaskStats } from '../database/task-queue.js'
 export const queueApp = new Hono()
 
 queueApp.get('/tasks/:id', async (c) => {
-    const id = c.req.param('id')
-    const task = await getTaskById(id)
+    try {
+        const id = c.req.param('id')
+        const task = await getTaskById(id)
 
-    if (!task) {
-        return c.json({ error: 'Task not found' }, 404)
+        if (!task) {
+            return c.json({ error: 'Task not found' }, 404)
+        }
+
+        return c.json(task)
+    } catch (error) {
+        const requestId = c.get('requestId')
+        console.error(`[Queue] [RequestID: ${requestId}] Error in /tasks/:id:`, error)
+        return c.json(
+            { error: error instanceof Error ? error.message : 'Unknown error' },
+            500
+        )
     }
-
-    return c.json(task)
 })
 
 queueApp.get('/stats', async (c) => {

@@ -40,6 +40,7 @@ agentApp.post('/run', async (c) => {
             message: 'Task has been queued for processing',
         })
     } catch (error) {
+        console.error(`[Agent] Error in /run:`, error)
         return c.json(
             { error: error instanceof Error ? error.message : 'Unknown error' },
             500
@@ -107,6 +108,7 @@ agentApp.post('/confirm', async (c) => {
             message: 'Confirmation has been queued for processing',
         })
     } catch (error) {
+        console.error(`[Agent] Error in /confirm:`, error)
         return c.json(
             { error: error instanceof Error ? error.message : 'Unknown error' },
             500

@@ -22,7 +22,7 @@ interface Agent {
     confirmAction: (approved: boolean, alternativeInput?: string) => Promise<AgentOutput>
 }
 
-function createAgent(input?: AgentInput): Agent {
+function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry) => Promise<void>): Agent {
     const effectiveInput = input || { task: '' }
     const thinkingMode: ThinkingMode = effectiveInput.thinkingMode || 'auto'
     const effectiveMaxIterations = effectiveInput.maxIterations || config.maxIterations
@@ -154,25 +154,28 @@ function createAgent(input?: AgentInput): Agent {
         ]
 
         while (state.currentIteration < effectiveMaxIterations) {
-            try {
-                const response = await think()
+            let taskHistory: AgentHistoryEntry = {
+                iteration: state.currentIteration,
+                timestamp: Date.now(),
+                role: MessageRole.System,
+                content: '',
+            }
 
-                let taskHistory: AgentHistoryEntry = {
-                    iteration: state.currentIteration,
-                    timestamp: Date.now(),
-                    role: MessageRole.Assistant,
-                    content: response.content,
-                }
+            try {
                 state.history.push(taskHistory)
+                const response = await think()
+                taskHistory.content = response.content
                 if (shouldAskForConfirmation(response.content)) {
                     state.requiresHumanConfirmation = true
                     state.status = AgentStatus.AwaitingConfirmation
+                    if (onProgress) await onProgress(taskHistory)
                     break
                 }
 
                 if (!response.toolCalls || response.toolCalls.length === 0) {
                     state.status = AgentStatus.Completed
                     taskHistory.role = MessageRole.Assistant
+                    if (onProgress) await onProgress(taskHistory)
                     return {
                         response: response.content,
                         status: AgentStatus.Completed,
@@ -187,6 +190,7 @@ function createAgent(input?: AgentInput): Agent {
                     if (isHighRiskError(toolResult.error || '')) {
                         state.requiresHumanConfirmation = true
                         state.status = AgentStatus.AwaitingConfirmation
+                        if (onProgress) await onProgress(taskHistory)
                         break
                     }
                 }
@@ -194,6 +198,7 @@ function createAgent(input?: AgentInput): Agent {
                 state.messages.push({
                     role: MessageRole.Assistant,
                     content: response.content,
+                    reasoning_content: response.reasoningContent,
                     tool_calls: response.toolCalls,
                 })
 
@@ -203,18 +208,24 @@ function createAgent(input?: AgentInput): Agent {
                     tool_call_id: response.toolCalls[0].id,
                 })
 
-                state.history.push({
+                let toolCallContent = toolResult.content ? toolResult.content : `Calling tool ${response.toolCalls[0].function.name}`
+                const toolHistoryEntry: AgentHistoryEntry = {
                     iteration: state.currentIteration,
                     timestamp: Date.now(),
                     role: MessageRole.Tool,
-                    content: toolResult.content,
-                })
+                    content: toolCallContent,
+                }
+                state.history.push(toolHistoryEntry)
+                if (onProgress) await onProgress(toolHistoryEntry)
 
                 state.currentIteration++
             } catch (error) {
+                const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
                 state.status = AgentStatus.Error
+                taskHistory.content = errorMsg
+                if (onProgress) await onProgress(taskHistory)
                 return {
-                    response: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                    response: errorMsg,
                     status: AgentStatus.Error,
                     history: state.history,
                     requiresConfirmation: false,

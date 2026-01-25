@@ -11,6 +11,7 @@ export interface Message {
     name?: string
     tool_calls?: ToolCall[]
     tool_call_id?: string
+    reasoning_content?: string
 }
 
 export interface ToolCall {
@@ -112,6 +113,7 @@ export interface AgentOutput {
 
 export interface LLMResponse {
     content: string
+    reasoningContent?: string
     toolCalls?: ToolCall[]
     finishReason: 'stop' | 'tool_calls' | 'length' | 'content_filter' | 'error'
 }

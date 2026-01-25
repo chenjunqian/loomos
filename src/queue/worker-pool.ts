@@ -4,7 +4,7 @@ import {
     completeTask,
     recoverStaleTasks,
 } from '../database/task-queue'
-import { getTaskRecord, updateTaskRecord } from '../database/task-record'
+import { getTaskRecord, updateTaskRecord, saveTaskHistory } from '../database/task-record'
 import { createAgent } from '../agent'
 import { AgentInput, AgentStatus } from '../agent/types'
 import { TaskQueue } from '@prisma/client'
@@ -37,13 +37,15 @@ const processTask = async (
             thinkingMode: 'auto',
         }
 
-        const agent = createAgent(input)
+        const onProgress = async (entry: Parameters<typeof saveTaskHistory>[1]): Promise<void> => {
+            await saveTaskHistory(task.taskRecordId, entry)
+        }
+
+        const agent = createAgent(input, onProgress)
         const result = await agent.run(input)
 
         await updateTaskRecord(task.taskRecordId, {
             status: result.status,
-            response: result.response,
-            history: result.history,
             requiresConfirmation: result.requiresConfirmation,
         })
 
@@ -51,7 +53,6 @@ const processTask = async (
         callbacks.onTaskComplete(task, true)
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        console.error(`[WorkerPool] Task ${task.id} failed:`, errorMessage)
 
         await updateTaskRecord(task.id, {
             status: 'error' as AgentStatus,
@@ -60,6 +61,7 @@ const processTask = async (
         await completeTask(task.id, false, errorMessage)
         callbacks.onTaskComplete(task, false, errorMessage)
         callbacks.onTaskError(task, error as Error)
+        console.error(`[WorkerPool] Task ${task.id} failed:`, errorMessage)
     }
 }
 

@@ -30,6 +30,7 @@ function createLLMClient(overrides?: LLMClientConfig) {
                 name: m.name,
                 tool_calls: m.tool_calls,
                 tool_call_id: m.tool_call_id,
+                reasoning_content: m.reasoning_content,
             })),
             tools: tools,
             temperature: 0.1,
@@ -71,6 +72,7 @@ function createLLMClient(overrides?: LLMClientConfig) {
 
             return {
                 content: message.content || '',
+                reasoningContent: message.reasoning_content || '',
                 toolCalls: message.tool_calls?.map((tc: Record<string, unknown>) => ({
                     id: tc.id as string,
                     type: tc.type as 'function',
@@ -107,6 +109,7 @@ function createLLMClient(overrides?: LLMClientConfig) {
                 name: m.name,
                 tool_calls: m.tool_calls,
                 tool_call_id: m.tool_call_id,
+                reasoning_content: m.reasoning_content,
             })),
             tools: tools,
             stream: true,
