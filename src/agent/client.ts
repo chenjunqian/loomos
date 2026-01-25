@@ -23,6 +23,8 @@ function createLLMClient(overrides?: LLMClientConfig) {
                 role: m.role,
                 content: m.content,
                 name: m.name,
+                tool_calls: m.tool_calls,
+                tool_call_id: m.tool_call_id,
             })),
             temperature: 0.1,
         }
@@ -95,6 +97,9 @@ function createLLMClient(overrides?: LLMClientConfig) {
             messages: messages.map((m) => ({
                 role: m.role,
                 content: m.content,
+                name: m.name,
+                tool_calls: m.tool_calls,
+                tool_call_id: m.tool_call_id,
             })),
             stream: true,
             temperature: 0.1,

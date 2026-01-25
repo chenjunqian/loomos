@@ -4,7 +4,7 @@ import { prisma, TASK_STATUS } from './task-queue'
 export interface CreateTaskRecordInput {
     id?: string
     userId: string
-    taskId: string
+    taskContent: string
     role: string
     status?: AgentStatus
 }
@@ -56,17 +56,26 @@ export async function saveTaskRecord(input: CreateTaskRecordInput): Promise<Task
     const taskRecord = await prisma.taskRecord.upsert({
         where: { id: input.id ?? '' },
         update: {
-            task: input.taskId,
             status: input.status ?? TASK_STATUS.PENDING,
         },
         create: {
             id: input.id ?? crypto.randomUUID(),
             userId: input.userId,
-            task: input.taskId,
             status: input.status ?? TASK_STATUS.PENDING,
             requiresConfirmation: false,
         },
     })
+
+    if (taskRecord && input.taskContent) {
+        await prisma.taskHistory.create({
+            data: {
+                taskRecordId: taskRecord.id,
+                role: input.role,
+                content: input.taskContent,
+                iteration: null,
+            },
+        })
+    }
 
     return {
         id: taskRecord.id,
@@ -88,9 +97,6 @@ export async function updateTaskRecord(
     if (updates.status !== undefined) {
         data.status = updates.status
     }
-    if (updates.response !== undefined) {
-        data.response = updates.response
-    }
     if (updates.requiresConfirmation !== undefined) {
         data.requiresConfirmation = updates.requiresConfirmation
     }
@@ -100,7 +106,7 @@ export async function updateTaskRecord(
         data,
     })
 
-    if (updates.history !== undefined) {
+    if (updates.history !== undefined && updates.history !== null && updates.history.length > 0) {
         await prisma.taskHistory.deleteMany({
             where: { taskRecordId: taskId },
         })
@@ -152,9 +158,7 @@ export async function getPendingConfirmations(
         return {
             id: record.id,
             userId: record.userId,
-            task: record.task,
             status: record.status as AgentStatus,
-            response: record.response ?? undefined,
             history,
             requiresConfirmation: record.requiresConfirmation,
             createdAt: record.createdAt,

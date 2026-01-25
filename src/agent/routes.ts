@@ -16,25 +16,13 @@ agentApp.post('/run', async (c) => {
         const taskId = body.taskId || crypto.randomUUID()
         const userId = body.userId || 'default'
 
-        const existingRecord = await getTaskRecord(userId, taskId)
-
-        if (existingRecord) {
-            await saveTaskRecord({
-                id: taskId,
-                userId,
-                taskId: body.task,
-                role: MessageRole.User,
-                status: AgentStatus.Idle,
-            })
-        } else {
-            await saveTaskRecord({
-                id: taskId,
-                userId,
-                taskId: body.task,
-                role: MessageRole.User,
-                status: AgentStatus.Idle,
-            })
-        }
+        await saveTaskRecord({
+            id: taskId,
+            userId,
+            taskContent: body.task,
+            role: MessageRole.User,
+            status: AgentStatus.Idle,
+        })
 
         await createTask({
             userId,
@@ -97,7 +85,7 @@ agentApp.post('/confirm', async (c) => {
         await saveTaskRecord({
             id: taskId,
             userId,
-            taskId: task,
+            taskContent: task,
             role: MessageRole.User,
             status: AgentStatus.Idle,
         })

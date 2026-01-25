@@ -12,6 +12,7 @@ import {
     LLMResponse,
     MessageRole,
     ThinkingMode,
+    Message,
 } from './types'
 import { allTools, toolHandlers, validateToolCall } from './tools'
 
@@ -140,15 +141,29 @@ function createAgent(input?: AgentInput): Agent {
         resetState()
         state.status = thinkingMode !== 'disabled' ? AgentStatus.Thinking : AgentStatus.Executing
 
+        let historyMessages: Message[] = []
+        if (input.taskHistory) {
+            state.history.push(...input.taskHistory)
+            historyMessages = input.taskHistory
+                .sort((a, b) => a.timestamp - b.timestamp)
+                .map((h) => ({ role: h.role, content: h.content }))
+        }
         state.messages = [
             { role: MessageRole.System, content: systemPrompt },
-            { role: MessageRole.User, content: input.task },
+            ...historyMessages,
         ]
 
         while (state.currentIteration < effectiveMaxIterations) {
             try {
                 const response = await think()
 
+                let taskHistory: AgentHistoryEntry = {
+                    iteration: state.currentIteration,
+                    timestamp: Date.now(),
+                    role: MessageRole.Assistant,
+                    content: response.content,
+                }
+                state.history.push(taskHistory)
                 if (shouldAskForConfirmation(response.content)) {
                     state.requiresHumanConfirmation = true
                     state.status = AgentStatus.AwaitingConfirmation
@@ -157,6 +172,7 @@ function createAgent(input?: AgentInput): Agent {
 
                 if (!response.toolCalls || response.toolCalls.length === 0) {
                     state.status = AgentStatus.Completed
+                    taskHistory.role = MessageRole.Assistant
                     return {
                         response: response.content,
                         status: AgentStatus.Completed,
@@ -185,6 +201,13 @@ function createAgent(input?: AgentInput): Agent {
                     role: MessageRole.Tool,
                     content: toolResult.content,
                     tool_call_id: response.toolCalls[0].id,
+                })
+
+                state.history.push({
+                    iteration: state.currentIteration,
+                    timestamp: Date.now(),
+                    role: MessageRole.Tool,
+                    content: toolResult.content,
                 })
 
                 state.currentIteration++
