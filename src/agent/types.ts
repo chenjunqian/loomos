@@ -83,6 +83,7 @@ export interface AgentInput {
     userId?: string
     taskId?: string
     task: string
+    taskHistory?: AgentHistoryEntry[]
     approved?: boolean
     alternativeInput?: string
     maxIterations?: number
@@ -95,9 +96,7 @@ export interface AgentInput {
 export interface TaskRecord {
     id: string
     userId: string
-    task: string
     status: AgentStatus
-    response?: string
     history: AgentHistoryEntry[]
     requiresConfirmation: boolean
     createdAt: Date

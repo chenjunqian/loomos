@@ -37,9 +37,7 @@ model TaskQueue {
 model TaskRecord {
   id                   String   @id @default(uuid())
   userId               String
-  task                 String
   status               String   @default("pending")
-  response             String?
   requiresConfirmation Boolean  @default(false)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt

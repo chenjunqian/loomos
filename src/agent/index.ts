@@ -31,7 +31,7 @@ function createAgent(input?: AgentInput): Agent {
     let state: AgentState = {
         status: AgentStatus.Idle,
         messages: [],
-        history: [],
+        history: input?.taskHistory || [],
         currentIteration: 0,
         uncertaintyLevel: 0,
         requiresHumanConfirmation: false,

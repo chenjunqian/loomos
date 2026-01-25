@@ -26,11 +26,13 @@ const processTask = async (
 ): Promise<void> => {
     try {
         const existingRecord = await getTaskRecord(task.userId, task.taskRecordId)
-        const taskDescription = existingRecord?.task || ''
+        const historyList = existingRecord?.history || []
+        const latestHistory = historyList[historyList.length - 1]
         const input: AgentInput = {
-            task: taskDescription,
+            task: latestHistory.content,
             userId: task.userId,
             taskId: task.taskRecordId,
+            taskHistory: historyList,
             maxIterations: 20,
             thinkingMode: 'auto',
         }

@@ -1,10 +1,10 @@
 import { TaskRecord, AgentStatus, AgentHistoryEntry } from '../agent/types'
-import { prisma } from './task-queue'
+import { prisma, TASK_STATUS } from './task-queue'
 
 export interface CreateTaskRecordInput {
     id?: string
     userId: string
-    task: string
+    taskId: string
     role: string
     status?: AgentStatus
 }
@@ -44,9 +44,7 @@ export async function getTaskRecord(
     return {
         id: record.id,
         userId: record.userId,
-        task: record.task,
         status: record.status as AgentStatus,
-        response: record.response ?? undefined,
         history,
         requiresConfirmation: record.requiresConfirmation,
         createdAt: record.createdAt,
@@ -58,14 +56,14 @@ export async function saveTaskRecord(input: CreateTaskRecordInput): Promise<Task
     const taskRecord = await prisma.taskRecord.upsert({
         where: { id: input.id ?? '' },
         update: {
-            task: input.task,
-            status: input.status ?? 'pending',
+            task: input.taskId,
+            status: input.status ?? TASK_STATUS.PENDING,
         },
         create: {
             id: input.id ?? crypto.randomUUID(),
             userId: input.userId,
-            task: input.task,
-            status: input.status ?? 'pending',
+            task: input.taskId,
+            status: input.status ?? TASK_STATUS.PENDING,
             requiresConfirmation: false,
         },
     })
@@ -73,7 +71,6 @@ export async function saveTaskRecord(input: CreateTaskRecordInput): Promise<Task
     return {
         id: taskRecord.id,
         userId: taskRecord.userId,
-        task: taskRecord.task,
         status: taskRecord.status as AgentStatus,
         history: [],
         requiresConfirmation: taskRecord.requiresConfirmation,
