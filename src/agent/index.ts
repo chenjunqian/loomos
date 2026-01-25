@@ -14,7 +14,7 @@ import {
     ThinkingMode,
     Message,
 } from './types'
-import { allTools, toolHandlers, validateToolCall } from './tools'
+import { allTools, toolHandlers, validateToolCall, toolsToOpenAIFormat } from './tools'
 
 interface Agent {
     run: (input: AgentInput) => Promise<AgentOutput>
@@ -51,7 +51,7 @@ function createAgent(input?: AgentInput): Agent {
 
     const think = async (): Promise<LLMResponse> => {
         state.status = thinkingMode !== 'disabled' ? AgentStatus.Thinking : AgentStatus.Executing
-        return llmClient.chat(state.messages)
+        return llmClient.chat(state.messages, toolsToOpenAIFormat(allTools))
     }
 
     const act = async (toolCall: ToolCall): Promise<ToolResult> => {

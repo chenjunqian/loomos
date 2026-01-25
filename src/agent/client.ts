@@ -1,5 +1,6 @@
 import { config } from './config'
 import { Message, LLMResponse, AgentInput } from './types'
+import { OpenAITool, toolsToOpenAIFormat } from './tools'
 
 interface LLMClientConfig {
     apiKey?: string
@@ -14,7 +15,11 @@ function createLLMClient(overrides?: LLMClientConfig) {
     const model = overrides?.model || config.model
     const timeout = overrides?.timeout || config.timeout
 
-    async function chat(messages: Message[], maxTokens?: number): Promise<LLMResponse> {
+    async function chat(
+        messages: Message[],
+        tools?: OpenAITool[],
+        maxTokens?: number
+    ): Promise<LLMResponse> {
         const url = `${baseUrl}/chat/completions`
 
         const body: Record<string, unknown> = {
@@ -26,6 +31,7 @@ function createLLMClient(overrides?: LLMClientConfig) {
                 tool_calls: m.tool_calls,
                 tool_call_id: m.tool_call_id,
             })),
+            tools: tools,
             temperature: 0.1,
         }
 
@@ -86,6 +92,7 @@ function createLLMClient(overrides?: LLMClientConfig) {
 
     async function streamChat(
         messages: Message[],
+        tools: OpenAITool[] | undefined,
         onChunk: (chunk: string) => void,
         onComplete: () => void,
         onError: (error: Error) => void
@@ -101,6 +108,7 @@ function createLLMClient(overrides?: LLMClientConfig) {
                 tool_calls: m.tool_calls,
                 tool_call_id: m.tool_call_id,
             })),
+            tools: tools,
             stream: true,
             temperature: 0.1,
         }
@@ -189,4 +197,4 @@ function createLLMClientFromInput(input: AgentInput): ReturnType<typeof createLL
 }
 
 export const llmClient = createLLMClient()
-export { createLLMClient, createLLMClientFromInput }
+export { createLLMClient, createLLMClientFromInput, toolsToOpenAIFormat }

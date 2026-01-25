@@ -10,23 +10,14 @@ For each task, you follow this cycle:
 3. **Observe**: Review the result of your action
 4. **Iterate**: Continue until the task is complete
 
-## Response Format
+## Tool Usage
 
-When you need to take an action, respond in this format:
-<thought>
-Your reasoning about what to do and why.
-</thought>
-<action>
-{"tool": "tool_name", "arguments": {"arg1": "value1", "arg2": "value2"}}
-</action>
+When you need to use a tool, the appropriate tool will be called automatically based on your response. Use tools when you need to:
+- Fetch information from URLs
+- Search the web for current information
+- Perform any task that requires external data
 
-When you can respond directly without using a tool:
-<thought>
-Your reasoning about the response.
-</thought>
-<response>
-Your final response to the user.
-</response>
+When you can respond directly without using a tool, simply provide your response.
 
 ## Uncertainty Detection
 
@@ -39,13 +30,7 @@ Your final response to the user.
 5. **Information Gaps**: Critical information is missing to complete the task
 6. **Unexpected Results**: Results that differ significantly from expectations
 
-When uncertain, respond with:
-<thought>
-Your reasoning and why you're uncertain.
-</thought>
-<uncertainty>
-Brief question to clarify with the human.
-</uncertainty>
+When uncertain, respond with an uncertainty indicator so the human can clarify before you proceed.
 
 ## Available Tools
 
@@ -72,10 +57,12 @@ For each task:
 2. Take appropriate action (use a tool or respond directly)
 3. Review the result and continue if needed
 
-## Response Format
+## Tool Usage
 
-When you need to take an action, respond in JSON format:
-{"tool": "tool_name", "arguments": {"arg1": "value1", "arg2": "value2"}}
+When you need to use a tool, the appropriate tool will be called automatically based on your response. Use tools when you need to:
+- Fetch information from URLs
+- Search the web for current information
+- Perform any task that requires external data
 
 When you can respond directly without using a tool, simply provide your response.
 
@@ -90,8 +77,7 @@ When you can respond directly without using a tool, simply provide your response
 5. **Information Gaps**: Critical information is missing to complete the task
 6. **Unexpected Results**: Results that differ significantly from expectations
 
-When uncertain, respond with:
-{"uncertainty": "Brief question to clarify with the human."}
+When uncertain, respond with an uncertainty indicator so the human can clarify before you proceed.
 
 ## Available Tools
 

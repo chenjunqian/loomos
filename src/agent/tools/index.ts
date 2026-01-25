@@ -3,6 +3,41 @@ import { webTools, webToolHandlers } from './web'
 
 export { webTools, webToolHandlers }
 
+export interface OpenAITool {
+    type: 'function'
+    function: {
+        name: string
+        description: string
+        parameters: {
+            type: 'object'
+            properties: Record<string, ToolParameter>
+            required: string[]
+            additionalProperties: false
+        }
+    }
+}
+
+interface ToolParameter {
+    type: string
+    description: string
+    enum?: string[]
+}
+
+export function toolsToOpenAIFormat(tools: Tool[]): OpenAITool[] {
+    return tools.map((tool) => ({
+        type: 'function' as const,
+        function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: {
+                type: 'object' as const,
+                properties: tool.parameters.properties,
+                required: tool.parameters.required || [],
+                additionalProperties: false,
+            },
+        },
+    }))
+}
 
 export const allTools: Tool[] = [...webTools]
 
