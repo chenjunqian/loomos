@@ -52,6 +52,11 @@ export interface ToolExecution {
     result: ToolResult
 }
 
+export interface ToolCallContent {
+    content: string
+    toolName: string
+}
+
 export enum AgentStatus {
     Idle = 'idle',
     Thinking = 'thinking',

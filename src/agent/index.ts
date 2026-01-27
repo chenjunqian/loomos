@@ -4,6 +4,7 @@ import { createLLMClientFromInput } from './client'
 import {
     ToolCall,
     ToolResult,
+    ToolCallContent,
     AgentState,
     AgentStatus,
     AgentInput,
@@ -213,12 +214,15 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                     tool_call_id: response.toolCalls[0].id,
                 })
 
-                let toolCallContent = toolResult.content ? toolResult.content : `Calling tool ${response.toolCalls[0].function.name}`
+                const toolCallContent: ToolCallContent = {
+                    content: toolResult.content,
+                    toolName: response.toolCalls[0].function.name,
+                }
                 const toolHistoryEntry: AgentHistoryEntry = {
                     iteration: state.currentIteration,
                     timestamp: Date.now(),
                     role: MessageRole.Tool,
-                    content: toolCallContent,
+                    content: JSON.stringify(toolCallContent),
                 }
                 state.history.push(toolHistoryEntry)
                 if (onProgress) await onProgress(toolHistoryEntry)
