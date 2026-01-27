@@ -1,6 +1,8 @@
 import { Tool, ThinkingMode } from './types'
 
-export const SYSTEM_PROMPT_WITH_THINKING = `You are an intelligent AI agent that helps users accomplish tasks by reasoning through problems and taking actions.
+export const SYSTEM_PROMPT_WITH_THINKING = `Current date and time: {{DATETIME}}
+
+You are an intelligent AI agent that helps users accomplish tasks by reasoning through problems and taking actions.
 
 ## Your Approach: ReAct (Reasoning + Acting)
 
@@ -48,7 +50,9 @@ When uncertain, respond with an uncertainty indicator so the human can clarify b
 
 Remember: Your goal is to help the user succeed while being safe, accurate, and collaborative.`
 
-export const SYSTEM_PROMPT_WITHOUT_THINKING = `You are an intelligent AI agent that helps users accomplish tasks by taking actions and responding directly.
+export const SYSTEM_PROMPT_WITHOUT_THINKING = `Current date and time: {{DATETIME}}
+
+You are an intelligent AI agent that helps users accomplish tasks by taking actions and responding directly.
 
 ## Your Approach
 
@@ -95,6 +99,7 @@ When uncertain, respond with an uncertainty indicator so the human can clarify b
 Remember: Your goal is to help the user succeed while being safe, accurate, and collaborative.`
 
 export function createSystemPrompt(tools: Tool[], thinkingMode: ThinkingMode = 'auto'): string {
+    const currentDateTime = new Date().toISOString()
     const toolsDescription = tools
         .map(
             (tool) => `- **${tool.name}**: ${tool.description}\n  Parameters: ${JSON.stringify(tool.parameters.properties, null, 2)}`
@@ -102,7 +107,7 @@ export function createSystemPrompt(tools: Tool[], thinkingMode: ThinkingMode = '
         .join('\n\n')
 
     const basePrompt = thinkingMode === 'disabled' ? SYSTEM_PROMPT_WITHOUT_THINKING : SYSTEM_PROMPT_WITH_THINKING
-    return basePrompt.replace('{{TOOLS}}', toolsDescription)
+    return basePrompt.replace('{{TOOLS}}', toolsDescription).replace('{{DATETIME}}', currentDateTime)
 }
 
 export const UNCERT_PROMPT = `The agent has indicated uncertainty about this task. Before proceeding, please clarify:
