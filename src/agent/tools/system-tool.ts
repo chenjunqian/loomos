@@ -105,9 +105,9 @@ export async function webFetch(url: string, options?: string): Promise<ToolResul
 
 export async function webSearch(query: string, numResults?: string): Promise<ToolResult> {
     try {
-        // Use DuckDuckGo HTML search (no API key required)
+        // Use Bing search
         const limit = numResults ? parseInt(numResults, 10) : 5
-        const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}&kl=us-en`
+        const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}`
 
         const response = await fetch(searchUrl, {
             headers: {
@@ -127,7 +127,7 @@ export async function webSearch(query: string, numResults?: string): Promise<Too
 
         // Parse simple results from HTML
         const results: string[] = []
-        const linkRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/g
+        const linkRegex = /<a[^>]+href="([^"]+)"[^>]*class="[^"]*b_algo[^"]*"[^>]*>([^<]+)<\/a>/g
         let match
 
         while ((match = linkRegex.exec(html)) && results.length < limit) {
