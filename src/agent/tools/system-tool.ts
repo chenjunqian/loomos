@@ -1,6 +1,6 @@
 import { Tool, ToolResult } from '../types'
 
-export const webTools: Tool[] = [
+export const systemTools: Tool[] = [
     {
         name: 'web_fetch',
         description: 'Fetch content from a URL. Returns the text content of the page.',
@@ -35,6 +35,24 @@ export const webTools: Tool[] = [
                 },
             },
             required: ['query'],
+        },
+    },
+    {
+        name: 'ask_user',
+        description: 'Ask the user for clarification, feedback, or additional information. Returns questions in JSON format for easy UI rendering.',
+        parameters: {
+            type: 'object',
+            properties: {
+                questions: {
+                    type: 'string',
+                    description: 'JSON array of questions. Each question: {id, text, type?, options?}',
+                },
+                context: {
+                    type: 'string',
+                    description: 'Optional context about why user input is needed.',
+                },
+            },
+            required: ['questions'],
         },
     },
 ]
@@ -140,7 +158,36 @@ export async function webSearch(query: string, numResults?: string): Promise<Too
     }
 }
 
-export const webToolHandlers: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
+export interface AskUserQuestion {
+    id: string
+    text: string
+    type?: 'text' | 'choice' | 'boolean'
+    options?: string[]
+}
+
+export interface AskUserArgs {
+    questions: AskUserQuestion[]
+    context?: string
+}
+
+export async function askUser(args: AskUserArgs): Promise<ToolResult> {
+    return {
+        success: true,
+        content: JSON.stringify({
+            type: 'ask_user',
+            questions: args.questions,
+            context: args.context,
+        }),
+        requiresConfirmation: true,
+    }
+}
+
+export const systemToolHandlers: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
     web_fetch: async (args) => webFetch(args.url as string, args.options as string),
     web_search: async (args) => webSearch(args.query as string, args.numResults as string),
+    ask_user: async (args) => {
+        const questionsStr = args.questions as string
+        const questions = JSON.parse(questionsStr)
+        return askUser({ questions, context: args.context as string })
+    },
 }

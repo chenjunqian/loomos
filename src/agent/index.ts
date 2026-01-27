@@ -86,6 +86,11 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
         }
         state.history.push(entry)
 
+        if (result.requiresConfirmation) {
+            state.requiresHumanConfirmation = true
+            state.status = AgentStatus.AwaitingConfirmation
+        }
+
         return result
     }
 

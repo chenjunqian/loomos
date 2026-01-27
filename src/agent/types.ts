@@ -43,6 +43,7 @@ export interface ToolResult {
     success: boolean
     content: string
     error?: string
+    requiresConfirmation?: boolean
 }
 
 export interface ToolExecution {

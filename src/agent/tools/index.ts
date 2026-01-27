@@ -1,7 +1,7 @@
 import { Tool, ToolResult } from '../types'
-import { webTools, webToolHandlers } from './web'
+import { systemTools, systemToolHandlers } from './system-tool'
 
-export { webTools, webToolHandlers }
+export { systemTools, systemToolHandlers }
 
 export interface OpenAITool {
     type: 'function'
@@ -39,10 +39,10 @@ export function toolsToOpenAIFormat(tools: Tool[]): OpenAITool[] {
     }))
 }
 
-export const allTools: Tool[] = [...webTools]
+export const allTools: Tool[] = [...systemTools]
 
 export const toolHandlers: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
-    ...webToolHandlers,
+    ...systemToolHandlers,
 }
 
 export function getToolByName(name: string): Tool | undefined {
