@@ -1,5 +1,6 @@
 import { Tool, ToolResult } from '../types'
 import { systemTools, systemToolHandlers } from './system-tool'
+import { getMcpManager } from '../../mcp'
 
 export { systemTools, systemToolHandlers }
 
@@ -45,12 +46,52 @@ export const toolHandlers: Record<string, (args: Record<string, unknown>) => Pro
     ...systemToolHandlers,
 }
 
-export function getToolByName(name: string): Tool | undefined {
-    return allTools.find((t) => t.name === name)
+export async function createMcpToolHandler(toolName: string): Promise<((args: Record<string, unknown>) => Promise<ToolResult>) | null> {
+    try {
+        const manager = await getMcpManager()
+        const tool = await manager.getTool(toolName)
+        if (!tool) return null
+
+        return async (args: Record<string, unknown>): Promise<ToolResult> => {
+            try {
+                const result = await manager.callTool(toolName, args)
+                const textContent = result.content
+                    .map((c) => (c.type === 'text' ? c.text || '' : `[${c.type}]`))
+                    .filter(Boolean)
+                    .join('\n')
+
+                return {
+                    success: !result.isError,
+                    content: textContent || 'No content',
+                    error: result.isError ? textContent : undefined,
+                }
+            } catch (error) {
+                return {
+                    success: false,
+                    content: '',
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                }
+            }
+        }
+    } catch {
+        return null
+    }
 }
 
-export function validateToolCall(toolName: string, args: Record<string, unknown>): { valid: boolean; error?: string } {
-    const tool = getToolByName(toolName)
+export async function getToolByName(name: string): Promise<Tool | undefined> {
+    const systemTool = allTools.find((t) => t.name === name)
+    if (systemTool) return systemTool
+
+    try {
+        const manager = await getMcpManager()
+        return manager.getTool(name)
+    } catch {
+        return undefined
+    }
+}
+
+export async function validateToolCall(toolName: string, args: Record<string, unknown>): Promise<{ valid: boolean; error?: string }> {
+    const tool = await getToolByName(toolName)
     if (!tool) {
         return { valid: false, error: `Unknown tool: ${toolName}` }
     }
@@ -63,4 +104,22 @@ export function validateToolCall(toolName: string, args: Record<string, unknown>
     }
 
     return { valid: true }
+}
+
+export async function callToolHandler(toolName: string, args: Record<string, unknown>): Promise<ToolResult> {
+    const systemHandler = toolHandlers[toolName]
+    if (systemHandler) {
+        return systemHandler(args)
+    }
+
+    const mcpHandler = await createMcpToolHandler(toolName)
+    if (mcpHandler) {
+        return mcpHandler(args)
+    }
+
+    return {
+        success: false,
+        content: '',
+        error: `No handler for tool: ${toolName}`,
+    }
 }

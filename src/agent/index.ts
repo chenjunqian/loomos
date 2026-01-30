@@ -14,8 +14,10 @@ import {
     MessageRole,
     ThinkingMode,
     Message,
+    Tool,
 } from './types'
-import { allTools, toolHandlers, validateToolCall, toolsToOpenAIFormat } from './tools'
+import { getMcpManager } from '../mcp'
+import { toolsToOpenAIFormat, validateToolCall, callToolHandler, getToolByName } from './tools'
 
 interface Agent {
     run: (input: AgentInput) => Promise<AgentOutput>
@@ -23,12 +25,31 @@ interface Agent {
     confirmAction: (approved: boolean, alternativeInput?: string) => Promise<AgentOutput>
 }
 
+async function loadAllTools(): Promise<Tool[]> {
+    const systemTools = await import('./tools').then((m) => m.allTools)
+    try {
+        const manager = await getMcpManager()
+        const mcpTools = await manager.getTools()
+        return [...systemTools, ...mcpTools]
+    } catch {
+        return systemTools
+    }
+}
+
 function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry) => Promise<void>): Agent {
+    let toolsCache: Tool[] | null = null
+
+    const getAllTools = async (): Promise<Tool[]> => {
+        if (!toolsCache) {
+            toolsCache = await loadAllTools()
+        }
+        return toolsCache
+    }
+
     const effectiveInput = input || { task: '' }
     const thinkingMode: ThinkingMode = effectiveInput.thinkingMode || 'auto'
     const effectiveMaxIterations = effectiveInput.maxIterations || config.maxIterations
     const llmClient = createLLMClientFromInput(effectiveInput)
-    const systemPrompt = createSystemPrompt(allTools, thinkingMode)
 
     let state: AgentState = {
         status: AgentStatus.Idle,
@@ -52,13 +73,14 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
 
     const think = async (): Promise<LLMResponse> => {
         state.status = thinkingMode !== 'disabled' ? AgentStatus.Thinking : AgentStatus.Executing
-        return llmClient.chat(state.messages, toolsToOpenAIFormat(allTools))
+        const tools = await getAllTools()
+        return llmClient.chat(state.messages, toolsToOpenAIFormat(tools))
     }
 
     const act = async (toolCall: ToolCall): Promise<ToolResult> => {
         state.status = AgentStatus.Executing
 
-        const validation = validateToolCall(toolCall.function.name, JSON.parse(toolCall.function.arguments))
+        const validation = await validateToolCall(toolCall.function.name, JSON.parse(toolCall.function.arguments))
         if (!validation.valid) {
             return {
                 success: false,
@@ -67,17 +89,8 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
             }
         }
 
-        const handler = toolHandlers[toolCall.function.name]
-        if (!handler) {
-            return {
-                success: false,
-                content: '',
-                error: `No handler for tool: ${toolCall.function.name}`,
-            }
-        }
-
         const args = JSON.parse(toolCall.function.arguments)
-        const result = await handler(args)
+        const result = await callToolHandler(toolCall.function.name, args)
 
         const entry: AgentHistoryEntry = {
             iteration: state.currentIteration,
@@ -154,6 +167,10 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                 .sort((a, b) => a.timestamp - b.timestamp)
                 .map((h) => ({ role: h.role, content: h.content }))
         }
+
+        const tools = await getAllTools()
+        const systemPrompt = createSystemPrompt(tools, thinkingMode)
+
         state.messages = [
             { role: MessageRole.System, content: systemPrompt },
             ...historyMessages,
@@ -290,4 +307,7 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
     }
 }
 
-export { createAgent, allTools as availableTools }
+export { createAgent }
+export async function availableTools(): Promise<Tool[]> {
+    return loadAllTools()
+}

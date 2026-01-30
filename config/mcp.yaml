@@ -1,0 +1,19 @@
+version: '1.0'
+
+servers:
+  - id: "github"
+    name: "GitHub Server"
+    description: "Interact with GitHub repositories"
+    transport:
+      type: "stdio"
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-github"]
+    env:
+      GITHUB_TOKEN: "${GITHUB_TOKEN}"
+    enabled: true
+
+discovery:
+  enabled: true
+  port: 3000
+  multicast: true
+  announceInterval: 30
