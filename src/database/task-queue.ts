@@ -22,7 +22,7 @@ export interface TaskWithStatus extends TaskQueue {
     status: TaskStatus
 }
 
-export async function createTask(input: CreateTaskInput): Promise<TaskQueue> {
+export async function createTaskForQueue(input: CreateTaskInput): Promise<TaskQueue> {
     return await prisma.taskQueue.create({
         data: {
             userId: input.userId,
@@ -84,7 +84,7 @@ async function claimTaskPostgreSQL(workerId: string): Promise<TaskQueue | null> 
     const result = await prisma.$queryRaw`
     UPDATE "TaskQueue"
     SET 
-      status = 'processing',
+      status = ${TASK_STATUS.PENDING},
       "workerId" = ${workerId},
       "startedAt" = NOW(),
       attempts = attempts + 1
@@ -123,9 +123,17 @@ export async function getTaskById(taskId: string): Promise<TaskQueue | null> {
     })
 }
 
-export async function getPendingTasks(): Promise<TaskQueue[]> {
+export async function getPendingTasks(
+    userId?: string,
+    taskId?: string
+): Promise<TaskQueue[]> {
+
     return await prisma.taskQueue.findMany({
-        where: { status: TASK_STATUS.PENDING },
+        where: {
+            status: TASK_STATUS.PENDING,
+            ...(userId && { userId }),
+            ...(taskId && { taskRecordId: taskId }),
+        },
         orderBy: [
             { priority: 'desc' },
             { createdAt: 'asc' },
@@ -133,9 +141,16 @@ export async function getPendingTasks(): Promise<TaskQueue[]> {
     })
 }
 
-export async function getProcessingTasks(): Promise<TaskQueue[]> {
+export async function getProcessingTasks(
+    userId?: string,
+    taskId?: string
+): Promise<TaskQueue[]> {
     return await prisma.taskQueue.findMany({
-        where: { status: TASK_STATUS.PROCESSING },
+        where: {
+            status: TASK_STATUS.PROCESSING,
+            ...(userId && { userId }),
+            ...(taskId && { taskRecordId: taskId }),
+        }
     })
 }
 

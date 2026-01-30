@@ -1,4 +1,4 @@
-import { TaskRecord, AgentStatus, AgentHistoryEntry } from '../agent/types'
+import { TaskRecord, AgentStatus, AgentHistoryEntry, MessageRole } from '../agent/types'
 import { prisma, TASK_STATUS } from './task-queue'
 
 export interface CreateTaskRecordInput {
@@ -119,6 +119,32 @@ export async function saveTaskHistory(
             createdAt: new Date(entry.timestamp),
         },
     })
+}
+
+export async function getTaskHistory(
+    userId: string,
+    taskId: string,
+    role?: MessageRole
+): Promise<AgentHistoryEntry[]> {
+    const where: Record<string, unknown> = {
+        taskRecord: {
+            userId,
+            id: taskId,
+        },
+    }
+    if (role) where.role = role
+
+    const history = await prisma.taskHistory.findMany({
+        where,
+        orderBy: { createdAt: 'asc' },
+    })
+
+    return history.map((entry) => ({
+        role: entry.role as MessageRole,
+        content: entry.content,
+        iteration: entry.iteration ?? undefined,
+        timestamp: entry.createdAt.getTime(),
+    }))
 }
 
 export async function getPendingConfirmations(

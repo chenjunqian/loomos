@@ -55,7 +55,7 @@ const processTask = async (
         const errorMessage = error instanceof Error ? error.message : String(error)
 
         await updateTaskRecord(task.id, {
-            status: 'error' as AgentStatus,
+            status: AgentStatus.Error,
         })
 
         await completeTask(task.id, false, errorMessage)

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { availableTools } from './index.js'
-import { getTaskRecord, saveTaskRecord } from '../database/task-record.js'
-import { createTask, getPendingTasks, completeTask, prisma } from '../database/task-queue.js'
+import { getTaskRecord, saveTaskRecord, getTaskHistory } from '../database/task-record.js'
+import { createTaskForQueue, completeTask, prisma, TASK_STATUS } from '../database/task-queue.js'
 import { AgentInput, AgentStatus, MessageRole } from './types.js'
 
 export const agentApp = new Hono()
@@ -24,19 +24,16 @@ agentApp.post('/run', async (c) => {
             status: AgentStatus.Idle,
         })
 
-        await createTask({
+        await createTaskForQueue({
             userId,
             taskRecordId: taskId,
             priority: 0,
         })
 
-        const pendingCount = (await getPendingTasks()).length
-
         return c.json({
             taskId,
             userId,
             status: 'queued',
-            position: pendingCount,
             message: 'Task has been queued for processing',
         })
     } catch (error) {
@@ -73,7 +70,7 @@ agentApp.post('/confirm', async (c) => {
                 where: {
                     userId,
                     taskRecordId: taskId,
-                    status: 'processing',
+                    status: TASK_STATUS.PROCESSING,
                 },
                 orderBy: { createdAt: 'desc' },
             })
@@ -91,19 +88,16 @@ agentApp.post('/confirm', async (c) => {
             status: AgentStatus.Idle,
         })
 
-        await createTask({
+        await createTaskForQueue({
             userId,
             taskRecordId: taskId,
             priority: 1,
         })
 
-        const pendingCount = (await getPendingTasks()).length
-
         return c.json({
             taskId,
             userId,
-            status: 'queued',
-            position: pendingCount,
+            status: TASK_STATUS.PENDING,
             approved,
             message: 'Confirmation has been queued for processing',
         })
@@ -139,6 +133,25 @@ agentApp.get('/state', async (c) => {
         message: 'No task record found in database',
         userId,
         taskId
+    })
+})
+
+agentApp.get('/history', async (c) => {
+    const userId = c.req.query('userId')
+    const taskId = c.req.query('taskId')
+    const role = c.req.query('role')
+
+    if (!userId || !taskId) {
+        return c.json({ error: 'userId and taskId are required as query parameters' }, 400)
+    }
+
+    const history = await getTaskHistory(userId, taskId, role as MessageRole | undefined)
+
+    return c.json({
+        userId,
+        taskId,
+        role: role || null,
+        history,
     })
 })
 
