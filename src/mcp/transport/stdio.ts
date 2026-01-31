@@ -17,16 +17,16 @@ export function StdioTransport(config: TransportConfig): Transport {
 
         const isBun = typeof process.versions.bun !== 'undefined'
 
-        let spawn: typeof import('node:child_process').spawn
+        let spawnFn: typeof import('node:child_process').spawn
         if (isBun) {
             const childProcess = await import('bun:child_process')
-            spawn = childProcess.spawn
+            spawnFn = childProcess.spawn as unknown as typeof import('node:child_process').spawn
         } else {
             const cp = await import('node:child_process')
-            spawn = cp.spawn
+            spawnFn = cp.spawn
         }
 
-        proc = spawn(stdioConfig.command, stdioConfig.args || [], {
+        proc = spawnFn(stdioConfig.command, stdioConfig.args || [], {
             env: { ...process.env, ...stdioConfig.env },
             stdio: ['pipe', 'pipe', 'pipe'],
         })

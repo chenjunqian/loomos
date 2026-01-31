@@ -48,7 +48,7 @@ agentApp.post('/run', async (c) => {
 agentApp.post('/confirm', async (c) => {
     try {
         const body = await c.req.json<AgentInput>()
-        const { approved, alternativeInput } = body
+        const { approved } = body
 
         if (!body.userId || !body.taskId) {
             return c.json({ error: 'userId and taskId are required' }, 400)

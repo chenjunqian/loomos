@@ -13,11 +13,10 @@ export interface Discovery {
 
 interface DiscoveryOptions {
     port?: number
-    multicast?: boolean
 }
 
 export function createDiscovery(options: DiscoveryOptions = {}): Discovery {
-    const { port = 3000, multicast = false } = options
+    const { port = 3000 } = options
     let server: ReturnType<typeof import('http').createServer> | null = null
     const handlers: Map<keyof DiscoveryEvents, Array<(...args: unknown[]) => void>> = new Map([
         ['serverFound', []],

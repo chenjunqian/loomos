@@ -17,7 +17,7 @@ import {
     Tool,
 } from './types'
 import { getMcpManager } from '../mcp'
-import { toolsToOpenAIFormat, validateToolCall, callToolHandler, getToolByName } from './tools'
+import { toolsToOpenAIFormat, validateToolCall, callToolHandler } from './tools'
 
 interface Agent {
     run: (input: AgentInput) => Promise<AgentOutput>
@@ -108,18 +108,6 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
         return result
     }
 
-    const extractReasoning = (): string => {
-        if (thinkingMode === 'disabled') {
-            return ''
-        }
-
-        const lastAssistantMsg = state.messages.filter((m) => m.role === 'assistant').pop()
-        if (!lastAssistantMsg?.content) return ''
-
-        const thoughtMatch = lastAssistantMsg.content.match(/<thought>([\s\S]*?)<\/thought>/)
-        return thoughtMatch ? thoughtMatch[1].trim() : ''
-    }
-
     const shouldAskForConfirmation = (content: string): boolean => {
         if (content.includes('<uncertainty>')) {
             state.uncertaintyLevel = 1.0
@@ -207,7 +195,8 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                     }
                 }
 
-                const toolResult = await act(response.toolCalls[0])
+                const toolCall = response.toolCalls[0]!
+                const toolResult = await act(toolCall)
 
                 if (!toolResult.success) {
                     if (isHighRiskError(toolResult.error || '')) {
@@ -228,12 +217,12 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                 state.messages.push({
                     role: MessageRole.Tool,
                     content: toolResult.content,
-                    tool_call_id: response.toolCalls[0].id,
+                    tool_call_id: toolCall.id,
                 })
 
                 const toolCallContent: ToolCallContent = {
                     content: toolResult.content,
-                    toolName: response.toolCalls[0].function.name,
+                    toolName: toolCall.function.name,
                 }
                 const toolHistoryEntry: AgentHistoryEntry = {
                     iteration: state.currentIteration,

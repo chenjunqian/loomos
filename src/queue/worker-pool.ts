@@ -28,6 +28,9 @@ const processTask = async (
         const existingRecord = await getTaskRecord(task.userId, task.taskRecordId)
         const historyList = existingRecord?.history || []
         const latestHistory = historyList[historyList.length - 1]
+        if (!latestHistory) {
+            throw new Error('No history found for task')
+        }
         const input: AgentInput = {
             task: latestHistory.content,
             userId: task.userId,

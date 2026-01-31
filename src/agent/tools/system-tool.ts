@@ -132,7 +132,7 @@ export async function webSearch(query: string, numResults?: string): Promise<Too
 
         while ((match = linkRegex.exec(html)) && results.length < limit) {
             const url = match[1]
-            const title = match[2].replace(/<[^>]*>/g, '').trim()
+            const title = match[2]?.replace(/<[^>]*>/g, '').trim()
             if (url && title) {
                 results.push(`${results.length + 1}. [${title}](${url})`)
             }

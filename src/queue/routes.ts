@@ -14,8 +14,8 @@ queueApp.get('/tasks/:id', async (c) => {
 
         return c.json(task)
     } catch (error) {
-        const requestId = c.get('requestId')
-        console.error(`[Queue] [RequestID: ${requestId}] Error in /tasks/:id:`, error)
+        const requestId = c.get('requestId' as never)
+        console.error(`[Queue] [RequestID: ${requestId ?? 'unknown'}] Error in /tasks/:id:`, error)
         return c.json(
             { error: error instanceof Error ? error.message : 'Unknown error' },
             500

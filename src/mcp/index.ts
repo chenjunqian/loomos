@@ -45,7 +45,6 @@ export function createMcpManager(options: McpManagerOptions = {}): McpManager {
         if (options.enableDiscovery !== false && config.discovery?.enabled) {
             discovery = createDiscovery({
                 port: config.discovery.port,
-                multicast: config.discovery.multicast,
             })
 
             discovery.on('serverFound', async (newConfig) => {
@@ -90,7 +89,12 @@ export function createMcpManager(options: McpManagerOptions = {}): McpManager {
     const callTool = async (name: string, args: Record<string, unknown>): Promise<McpToolCallResult> => {
         await ensureInitialized()
 
-        const serverId = name.split('_')[0]
+        const parts = name.split('_')
+        const serverId = parts[0]
+        if (!serverId) {
+            throw new Error(`Invalid tool name: ${name}`)
+        }
+
         const client = clients.get(serverId)
 
         if (!client) {

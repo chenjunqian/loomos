@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as yaml from 'js-yaml'
-import { McpConfig, McpServerConfig } from '../types'
+import { McpConfig } from '../types'
 import { validateConfig } from './schema'
 
 interface ConfigLoader {
