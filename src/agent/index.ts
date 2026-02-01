@@ -16,7 +16,6 @@ import {
     Message,
     Tool,
 } from './types'
-import { getMcpManager } from '../mcp'
 import { toolsToOpenAIFormat, validateToolCall, callToolHandler } from './tools'
 
 interface Agent {
@@ -28,9 +27,7 @@ interface Agent {
 async function loadAllTools(): Promise<Tool[]> {
     const systemTools = await import('./tools').then((m) => m.allTools)
     try {
-        const manager = await getMcpManager()
-        const mcpTools = await manager.getTools()
-        return [...systemTools, ...mcpTools]
+        return [...systemTools]
     } catch {
         return systemTools
     }
