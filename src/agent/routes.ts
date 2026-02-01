@@ -155,6 +155,7 @@ agentApp.get('/history', async (c) => {
     })
 })
 
-agentApp.get('/tools', (c) => {
-    return c.json(availableTools)
+agentApp.get('/tools', async (c) => {
+    const allTools = await availableTools()
+    return c.json(allTools)
 })

@@ -1,5 +1,7 @@
 import { Tool, ToolResult } from '../types'
 import { systemTools, systemToolHandlers } from './system-tool'
+import { getMCPClient, extractMCPToolContent, parseMCPError } from '../mcp/index.js'
+import { getEnabledMCPServers, convertMCPToolToTool } from '../mcp/index.js'
 
 export { systemTools, systemToolHandlers }
 
@@ -17,7 +19,7 @@ export interface OpenAITool {
     }
 }
 
-interface ToolParameter {
+export interface ToolParameter {
     type: string
     description: string
     enum?: string[]
@@ -43,6 +45,63 @@ export const allTools: Tool[] = [...systemTools]
 
 export const toolHandlers: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
     ...systemToolHandlers,
+}
+
+const mcpToolCache: Tool[] = []
+const mcpToolHandlers: Map<string, string> = new Map()
+
+export async function loadMCPTools(): Promise<Tool[]> {
+    const enabledServers = getEnabledMCPServers()
+
+    for (const serverConfig of enabledServers) {
+        try {
+            const mcpClient = await getMCPClient(serverConfig)
+            const result = await mcpClient.listTools()
+
+            for (const tool of result.tools) {
+                const adaptedTool = convertMCPToolToTool(tool, serverConfig.name)
+                mcpToolCache.push(adaptedTool)
+                mcpToolHandlers.set(adaptedTool.name, serverConfig.name)
+            }
+        } catch (error) {
+            console.error(`Failed to load tools from MCP server ${serverConfig.name}:`, error)
+        }
+    }
+
+    return mcpToolCache
+}
+
+export async function getAllToolsIncludingMCP(): Promise<Tool[]> {
+    const mcpTools = await loadMCPTools()
+    return [...systemTools, ...mcpTools]
+}
+
+export async function getMCPToolHandler(
+    toolName: string
+): Promise<((args: Record<string, unknown>) => Promise<ToolResult>) | null> {
+    const serverName = mcpToolHandlers.get(toolName)
+    if (!serverName) {
+        return null
+    }
+
+    return async (args: Record<string, unknown>): Promise<ToolResult> => {
+        try {
+            const config = { name: serverName, transport: 'stdio' as const }
+            const mcpClient = await getMCPClient(config as any)
+            const result = await mcpClient.callTool(toolName.split('_').slice(1).join('_'), args)
+            return {
+                success: true,
+                content: extractMCPToolContent(result),
+                error: undefined,
+            }
+        } catch (error) {
+            return {
+                success: false,
+                content: '',
+                error: parseMCPError(error),
+            }
+        }
+    }
 }
 
 export async function getToolByName(name: string): Promise<Tool | undefined> {

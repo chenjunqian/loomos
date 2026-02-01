@@ -16,7 +16,7 @@ import {
     Message,
     Tool,
 } from './types'
-import { toolsToOpenAIFormat, validateToolCall, callToolHandler } from './tools'
+import { getAllToolsIncludingMCP, toolsToOpenAIFormat, validateToolCall, callToolHandler, getMCPToolHandler } from './tools'
 
 interface Agent {
     run: (input: AgentInput) => Promise<AgentOutput>
@@ -25,12 +25,8 @@ interface Agent {
 }
 
 async function loadAllTools(): Promise<Tool[]> {
-    const systemTools = await import('./tools').then((m) => m.allTools)
-    try {
-        return [...systemTools]
-    } catch {
-        return systemTools
-    }
+    const allTools = await getAllToolsIncludingMCP()
+    return allTools
 }
 
 function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry) => Promise<void>): Agent {
@@ -87,6 +83,26 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
         }
 
         const args = JSON.parse(toolCall.function.arguments)
+
+        const mcpHandler = await getMCPToolHandler(toolCall.function.name)
+        if (mcpHandler) {
+            const result = await mcpHandler(args)
+            const entry: AgentHistoryEntry = {
+                iteration: state.currentIteration,
+                content: result.content,
+                timestamp: Date.now(),
+                role: MessageRole.System,
+            }
+            state.history.push(entry)
+
+            if (result.requiresConfirmation) {
+                state.requiresHumanConfirmation = true
+                state.status = AgentStatus.AwaitingConfirmation
+            }
+
+            return result
+        }
+
         const result = await callToolHandler(toolCall.function.name, args)
 
         const entry: AgentHistoryEntry = {
