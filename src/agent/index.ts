@@ -247,6 +247,13 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                 if (onProgress) await onProgress(toolHistoryEntry)
 
                 state.currentIteration++
+
+                if (toolCall.function.name === 'ask_user') {
+                    state.requiresHumanConfirmation = true
+                    state.status = AgentStatus.AwaitingConfirmation
+                    if (onProgress) await onProgress(taskHistory)
+                    break
+                }
             } catch (error) {
                 const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
                 state.status = AgentStatus.Error
@@ -261,10 +268,9 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
             }
         }
 
-        state.status = AgentStatus.Completed
         return {
             response: 'Task completed (iteration limit reached)',
-            status: AgentStatus.Completed,
+            status: state.status,
             history: state.history,
             requiresConfirmation: state.requiresHumanConfirmation,
         }
