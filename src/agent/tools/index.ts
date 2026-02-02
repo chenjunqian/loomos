@@ -110,7 +110,7 @@ export async function getToolByName(name: string): Promise<Tool | undefined> {
         return systemTool
     }
 
-    return undefined
+    return mcpToolCache.find((t) => t.name === name)
 }
 
 export async function validateToolCall(toolName: string, args: Record<string, unknown>): Promise<{ valid: boolean; error?: string }> {
