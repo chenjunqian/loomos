@@ -36,7 +36,7 @@ export const mcpServers: MCPServerConfig[] = [
     },
     {
         name: 'fetch',
-        enabled: true,
+        enabled: false,
         transport: 'http',
         http: {
             url: process.env.MCP_FETCH_URL || 'http://localhost:3000/mcp',
