@@ -1,5 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import {
     ListToolsResultSchema,
     CallToolResultSchema,
@@ -18,44 +20,50 @@ interface ToolCallResult {
     }>
 }
 
-export class MCPClient {
-    private client: Client | null = null
-    private transport: StdioClientTransport | null = null
-    private serverName: string
+export interface MCPClient {
+    connect(): Promise<void>
+    listTools(): Promise<ToolListResult>
+    callTool(name: string, args: Record<string, unknown>): Promise<ToolCallResult>
+    disconnect(): Promise<void>
+    getServerName(): string
+}
 
-    constructor(private config: MCPServerConfig) {
-        this.serverName = config.name
-    }
+export function createMCPClient(config: MCPServerConfig): MCPClient {
+    let client: Client | null = null
+    let transport: Transport | null = null
+    const serverName = config.name
 
-    async connect(): Promise<void> {
-        if (this.config.transport !== 'stdio' || !this.config.stdio) {
-            throw new Error(`Unsupported transport type: ${this.config.transport}`)
+    const connect = async (): Promise<void> => {
+        if (config.transport === 'stdio' && config.stdio) {
+            transport = new StdioClientTransport({
+                command: config.stdio.command,
+                args: config.stdio.args,
+                env: config.stdio.env,
+            })
+        } else if (config.transport === 'http' && config.http) {
+            transport = new SSEClientTransport(new URL(config.http.url))
+        } else {
+            throw new Error(`Unsupported transport type: ${config.transport}`)
         }
 
-        this.transport = new StdioClientTransport({
-            command: this.config.stdio.command,
-            args: this.config.stdio.args,
-            env: this.config.stdio.env,
-        })
-
-        this.client = new Client({
+        client = new Client({
             name: 'loomos-agent',
             version: '1.0.0',
         })
 
-        this.client.onerror = (error: Error) => {
-            console.error(`[MCP] Client error for ${this.serverName}:`, error.message)
+        client.onerror = (error: Error) => {
+            console.error(`[MCP] Client error for ${serverName}:`, error.message)
         }
 
-        await this.client.connect(this.transport)
+        await client.connect(transport)
     }
 
-    async listTools(): Promise<ToolListResult> {
-        if (!this.client) {
-            throw new Error(`MCP client not connected for server: ${this.serverName}`)
+    const listTools = async (): Promise<ToolListResult> => {
+        if (!client) {
+            throw new Error(`MCP client not connected for server: ${serverName}`)
         }
 
-        const result = await this.client.request(
+        const result = await client.request(
             { method: 'tools/list', params: {} },
             ListToolsResultSchema
         )
@@ -63,12 +71,12 @@ export class MCPClient {
         return { tools: result.tools }
     }
 
-    async callTool(name: string, args: Record<string, unknown>): Promise<ToolCallResult> {
-        if (!this.client) {
-            throw new Error(`MCP client not connected for server: ${this.serverName}`)
+    const callTool = async (name: string, args: Record<string, unknown>): Promise<ToolCallResult> => {
+        if (!client) {
+            throw new Error(`MCP client not connected for server: ${serverName}`)
         }
 
-        const result = await this.client.request(
+        const result = await client.request(
             {
                 method: 'tools/call',
                 params: { name, arguments: args },
@@ -79,16 +87,24 @@ export class MCPClient {
         return { content: result.content }
     }
 
-    async disconnect(): Promise<void> {
-        if (this.transport) {
-            await this.transport.close()
-            this.transport = null
-            this.client = null
+    const disconnect = async (): Promise<void> => {
+        if (transport) {
+            await transport.close()
+            transport = null
+            client = null
         }
     }
 
-    getServerName(): string {
-        return this.serverName
+    const getServerName = (): string => {
+        return serverName
+    }
+
+    return {
+        connect,
+        listTools,
+        callTool,
+        disconnect,
+        getServerName,
     }
 }
 
@@ -99,7 +115,7 @@ export async function getMCPClient(config: MCPServerConfig): Promise<MCPClient> 
     let client = clientCache.get(cacheKey)
 
     if (!client) {
-        client = new MCPClient(config)
+        client = createMCPClient(config)
         await client.connect()
         clientCache.set(cacheKey, client)
     }
