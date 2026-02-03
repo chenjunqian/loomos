@@ -1,42 +1,42 @@
 import { Tool, ToolResult } from '../types'
 
 export const systemTools: Tool[] = [
-    {
-        name: 'web_fetch',
-        description: 'Fetch content from a URL. Returns the text content of the page.',
-        parameters: {
-            type: 'object',
-            properties: {
-                url: {
-                    type: 'string',
-                    description: 'The URL to fetch',
-                },
-                options: {
-                    type: 'string',
-                    description: 'Optional JSON object with fetch options (method, headers, body)',
-                },
-            },
-            required: ['url'],
-        },
-    },
-    {
-        name: 'web_search',
-        description: 'Search the web for information using a search engine.',
-        parameters: {
-            type: 'object',
-            properties: {
-                query: {
-                    type: 'string',
-                    description: 'The search query',
-                },
-                numResults: {
-                    type: 'string',
-                    description: 'Number of results to return (default: 5)',
-                },
-            },
-            required: ['query'],
-        },
-    },
+    // {
+    //     name: 'web_fetch',
+    //     description: 'Fetch content from a URL. Returns the text content of the page.',
+    //     parameters: {
+    //         type: 'object',
+    //         properties: {
+    //             url: {
+    //                 type: 'string',
+    //                 description: 'The URL to fetch',
+    //             },
+    //             options: {
+    //                 type: 'string',
+    //                 description: 'Optional JSON object with fetch options (method, headers, body)',
+    //             },
+    //         },
+    //         required: ['url'],
+    //     },
+    // },
+    // {
+    //     name: 'web_search',
+    //     description: 'Search the web for information using a search engine.',
+    //     parameters: {
+    //         type: 'object',
+    //         properties: {
+    //             query: {
+    //                 type: 'string',
+    //                 description: 'The search query',
+    //             },
+    //             numResults: {
+    //                 type: 'string',
+    //                 description: 'Number of results to return (default: 5)',
+    //             },
+    //         },
+    //         required: ['query'],
+    //     },
+    // },
     {
         name: 'ask_user',
         description: 'Ask the user for clarification, feedback, or additional information. Returns questions in JSON format for easy UI rendering.',
@@ -183,8 +183,8 @@ export async function askUser(args: AskUserArgs): Promise<ToolResult> {
 }
 
 export const systemToolHandlers: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
-    web_fetch: async (args) => webFetch(args.url as string, args.options as string),
-    web_search: async (args) => webSearch(args.query as string, args.numResults as string),
+    // web_fetch: async (args) => webFetch(args.url as string, args.options as string),
+    // web_search: async (args) => webSearch(args.query as string, args.numResults as string),
     ask_user: async (args) => {
         const questionsStr = args.questions as string
         const questions = JSON.parse(questionsStr)

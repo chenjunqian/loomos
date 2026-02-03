@@ -23,23 +23,12 @@ export const mcpServers: MCPServerConfig[] = [
         },
     },
     {
-        name: 'github',
+        name: 'playwright',
         enabled: true,
         transport: 'stdio',
         stdio: {
             command: 'npx',
-            args: ['-y', '@modelcontextprotocol/server-github'],
-            env: {
-                GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN || '',
-            },
-        },
-    },
-    {
-        name: 'fetch',
-        enabled: false,
-        transport: 'http',
-        http: {
-            url: process.env.MCP_FETCH_URL || 'http://localhost:3000/mcp',
+            args: ['-y', '@playwright/mcp@latest'],
         },
     },
 ]
