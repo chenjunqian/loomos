@@ -16,7 +16,13 @@ import {
     Message,
     Tool,
 } from './types'
-import { getAllToolsIncludingMCP, toolsToOpenAIFormat, validateToolCall, callToolHandler, getMCPToolHandler } from './tools'
+import {
+    getAllToolsIncludingMCP,
+    toolsToOpenAIFormat,
+    validateToolCall,
+    callToolHandler,
+    getMCPToolHandler,
+} from './tools'
 
 interface Agent {
     run: (input: AgentInput) => Promise<AgentOutput>
@@ -43,6 +49,7 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
     const thinkingMode: ThinkingMode = effectiveInput.thinkingMode || 'auto'
     const effectiveMaxIterations = effectiveInput.maxIterations || config.maxIterations
     const llmClient = createLLMClientFromInput(effectiveInput)
+    const userId = effectiveInput.userId
 
     let state: AgentState = {
         status: AgentStatus.Idle,
@@ -84,7 +91,7 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
 
         const args = JSON.parse(toolCall.function.arguments)
 
-        const mcpHandler = await getMCPToolHandler(toolCall.function.name)
+        const mcpHandler = await getMCPToolHandler(toolCall.function.name, userId)
         if (mcpHandler) {
             const result = await mcpHandler(args)
             const entry: AgentHistoryEntry = {

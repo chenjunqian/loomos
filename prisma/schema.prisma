@@ -61,3 +61,11 @@ model TaskHistory {
   @@index([taskRecordId, createdAt])
   @@index([taskRecordId, role])
 }
+
+model UserSession {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  storageState String   @default("{}")  // JSON string of Playwright storage state
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

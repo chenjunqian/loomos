@@ -1,7 +1,14 @@
 import { Tool, ToolResult } from '../types'
 import { systemTools, systemToolHandlers } from './system-tool'
-import { getMCPClient, extractMCPToolContent, parseMCPError } from '../mcp/index.js'
-import { getEnabledMCPServers, convertMCPToolToTool } from '../mcp/index.js'
+import {
+    getMCPClient,
+    getIsolatedMCPClient,
+    extractMCPToolContent,
+    parseMCPError,
+    type MCPClient,
+    type IsolatedMCPClient,
+} from '../mcp/index.js'
+import { getEnabledMCPServers, convertMCPToolToTool, getMCPServerConfig } from '../mcp/index.js'
 
 export { systemTools, systemToolHandlers }
 
@@ -78,6 +85,14 @@ export async function getAllToolsIncludingMCP(): Promise<Tool[]> {
 
 export async function getMCPToolHandler(
     toolName: string
+): Promise<((args: Record<string, unknown>) => Promise<ToolResult>) | null>
+export async function getMCPToolHandler(
+    toolName: string,
+    userId?: string
+): Promise<((args: Record<string, unknown>) => Promise<ToolResult>) | null>
+export async function getMCPToolHandler(
+    toolName: string,
+    userId?: string
 ): Promise<((args: Record<string, unknown>) => Promise<ToolResult>) | null> {
     const serverName = mcpToolHandlers.get(toolName)
     if (!serverName) {
@@ -86,8 +101,23 @@ export async function getMCPToolHandler(
 
     return async (args: Record<string, unknown>): Promise<ToolResult> => {
         try {
-            const config = { name: serverName, transport: 'stdio' as const }
-            const mcpClient = await getMCPClient(config as any)
+            let mcpClient: MCPClient | IsolatedMCPClient
+
+            if (userId) {
+                const serverConfig = getMCPServerConfig(serverName)
+                if (!serverConfig) {
+                    return {
+                        success: false,
+                        content: '',
+                        error: `MCP server config not found: ${serverName}`,
+                    }
+                }
+                mcpClient = await getIsolatedMCPClient(serverConfig, userId)
+            } else {
+                const config = { name: serverName, transport: 'stdio' as const }
+                mcpClient = await getMCPClient(config as any)
+            }
+
             const result = await mcpClient.callTool(toolName.split('_').slice(1).join('_'), args)
             return {
                 success: true,

@@ -8,6 +8,7 @@ import { getTaskRecord, updateTaskRecord, saveTaskHistory } from '../database/ta
 import { createAgent } from '../agent'
 import { AgentInput, AgentStatus } from '../agent/types'
 import { TaskQueue } from '@prisma/client'
+import { cleanupIsolatedMCPClient } from '../agent/mcp/index.js'
 
 const provider = process.env.DATABASE_PROVIDER || 'sqlite'
 const isSQLite = provider === 'sqlite'
@@ -65,6 +66,10 @@ const processTask = async (
         callbacks.onTaskComplete(task, false, errorMessage)
         callbacks.onTaskError(task, error as Error)
         console.error(`[WorkerPool] Task ${task.id} failed:`, errorMessage)
+    } finally {
+        if (task.userId) {
+            await cleanupIsolatedMCPClient(task.userId)
+        }
     }
 }
 
