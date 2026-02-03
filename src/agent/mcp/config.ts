@@ -76,7 +76,11 @@ export function getIsolatedServerConfig(baseConfig: MCPServerConfig, userId: str
     const args = [...baseConfig.stdio.args]
 
     if (baseConfig.name === 'playwright') {
-        args.push('--isolated', '--user-data-dir', userDataDir)
+        args.push(
+            '--isolated',
+            '--user-data-dir', userDataDir,
+            '--storage-state', getUserStorageStatePath(userId)
+        )
     }
 
     return {

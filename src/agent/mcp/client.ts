@@ -12,6 +12,7 @@ import {
     getIsolatedServerConfig,
     getUserStorageStatePath,
     getSessionSyncConfig,
+    ensureUserStorageDir,
 } from './config.js'
 import {
     saveUserSession,
@@ -166,6 +167,9 @@ function createIsolatedMCPClient(config: MCPServerConfig, userId: string): Isola
     const storageStatePath = getUserStorageStatePath(userId)
 
     const connect = async (): Promise<void> => {
+        await ensureUserStorageDir(userId)
+        await restoreFromDatabase()
+
         if (config.transport === 'stdio' && config.stdio) {
             transport = new StdioClientTransport({
                 command: config.stdio.command,
