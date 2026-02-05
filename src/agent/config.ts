@@ -5,6 +5,7 @@ export interface AgentConfig {
     timeout: number
     maxIterations: number
     uncertainThreshold: number
+    skillsPath: string
 }
 
 export function getAgentConfig(): AgentConfig {
@@ -20,6 +21,7 @@ export function getAgentConfig(): AgentConfig {
         timeout: parseInt(process.env.AGENT_TIMEOUT || '60000', 10),
         maxIterations: parseInt(process.env.AGENT_MAX_ITERATIONS || '20', 10),
         uncertainThreshold: parseFloat(process.env.AGENT_UNCERTAINTY_THRESHOLD || '0.5'),
+        skillsPath: process.env.SKILLS_PATH || './skills',
     }
 }
 

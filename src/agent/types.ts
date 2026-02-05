@@ -98,6 +98,7 @@ export interface AgentInput {
     apiKey?: string
     baseUrl?: string
     model?: string
+    activeSkills?: string[]
 }
 
 export interface TaskRecord {
@@ -122,4 +123,27 @@ export interface LLMResponse {
     reasoningContent?: string
     toolCalls?: ToolCall[]
     finishReason: 'stop' | 'tool_calls' | 'length' | 'content_filter' | 'error'
+}
+
+export interface SkillMetadata {
+    name: string
+    description: string
+    license?: string
+    allowedTools?: string[]
+    model?: string
+    version?: string
+    compatibility?: string
+    metadata?: Record<string, unknown>
+}
+
+export interface Skill {
+    metadata: SkillMetadata
+    content: string
+    directory: string
+}
+
+export interface SkillBundle {
+    scripts: string[]
+    references: string[]
+    examples: string[]
 }

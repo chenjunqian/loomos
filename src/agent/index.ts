@@ -23,6 +23,7 @@ import {
     callToolHandler,
     getMCPToolHandler,
 } from './tools'
+import { getSkillByName } from './skills'
 
 interface Agent {
     run: (input: AgentInput) => Promise<AgentOutput>
@@ -177,10 +178,26 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
         }
 
         const tools = await getAllTools()
-        const systemPrompt = createSystemPrompt(tools, thinkingMode)
+        const systemPrompt = await createSystemPrompt(tools, thinkingMode)
+
+        let fullSystemPrompt = systemPrompt
+        if (effectiveInput.activeSkills && effectiveInput.activeSkills.length > 0) {
+            const activeSkillsContent = effectiveInput.activeSkills
+                .map(name => {
+                    const skill = getSkillByName(name)
+                    if (skill) {
+                        return `\n\n=== BEGIN SKILL: ${skill.metadata.name} ===\n\n${skill.content}\n\n=== END SKILL: ${skill.metadata.name} ===`
+                    }
+                    return null
+                })
+                .filter(Boolean)
+                .join('\n')
+
+            fullSystemPrompt = systemPrompt + `\n\n=== ACTIVATED SKILLS ===${activeSkillsContent}`
+        }
 
         state.messages = [
-            { role: MessageRole.System, content: systemPrompt },
+            { role: MessageRole.System, content: fullSystemPrompt },
             ...historyMessages,
         ]
 

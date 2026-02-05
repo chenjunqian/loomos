@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { queueApp } from './queue/routes'
 import { agentApp } from './agent/routes'
+import { skillsRoutes } from './agent/skills/routes'
 import { workerPool } from './queue/worker-pool'
 
 const app = new Hono()
@@ -9,6 +10,7 @@ const app = new Hono()
 app.use('*', logger())
 app.route('/queue', queueApp)
 app.route('/agent', agentApp)
+app.route('/agent', skillsRoutes)
 
 // Health check
 app.get('/', (c) => {

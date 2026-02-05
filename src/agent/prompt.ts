@@ -129,6 +129,10 @@ When uncertain, **call the ask_user tool** with your questions before proceeding
 
 {{TOOLS}}
 
+## Available Skills
+
+{{SKILLS}}
+
 ## Guidelines
 
 - Think step by step before taking actions
@@ -270,6 +274,10 @@ When uncertain, **call the ask_user tool** with your questions before proceeding
 
 {{TOOLS}}
 
+## Available Skills
+
+{{SKILLS}}
+
 ## Guidelines
 
 - Use tools efficiently - don't repeat unnecessary tool calls
@@ -282,7 +290,12 @@ When uncertain, **call the ask_user tool** with your questions before proceeding
 
 Remember: Your goal is to help the user succeed while being safe, accurate, and collaborative.`
 
-export function createSystemPrompt(tools: Tool[], thinkingMode: ThinkingMode = 'auto'): string {
+import { loadSkills } from './skills'
+import { config } from './config'
+
+let skillsCache: Array<{ name: string; description: string }> | null = null
+
+export async function createSystemPrompt(tools: Tool[], thinkingMode: ThinkingMode = 'auto'): Promise<string> {
     const currentDateTime = new Date().toISOString()
     const toolsDescription = tools
         .map(
@@ -290,8 +303,23 @@ export function createSystemPrompt(tools: Tool[], thinkingMode: ThinkingMode = '
         )
         .join('\n\n')
 
+    if (!skillsCache) {
+        const skills = await loadSkills(config.skillsPath)
+        skillsCache = skills.map(skill => ({
+            name: skill.metadata.name,
+            description: skill.metadata.description,
+        }))
+    }
+
+    const skillsSection = skillsCache.length > 0
+        ? skillsCache.map(s => `### ${s.name}\n${s.description}`).join('\n\n')
+        : 'No skills available.'
+
     const basePrompt = thinkingMode === 'disabled' ? SYSTEM_PROMPT_WITHOUT_THINKING : SYSTEM_PROMPT_WITH_THINKING
-    return basePrompt.replace('{{TOOLS}}', toolsDescription).replace('{{DATETIME}}', currentDateTime)
+    return basePrompt
+        .replace('{{TOOLS}}', toolsDescription)
+        .replace('{{DATETIME}}', currentDateTime)
+        .replace('{{SKILLS}}', skillsSection)
 }
 
 export const UNCERT_PROMPT = `The agent has indicated uncertainty about this task. Before proceeding, please clarify:
