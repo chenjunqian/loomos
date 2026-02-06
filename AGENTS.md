@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-AI Agent API service built on Bun runtime with Hono framework. Implements intelligent agent system with LLM integration, native OpenAI tool calling, real-time task history tracking, and human-in-the-loop confirmation.
+AI Agent API service built on Bun runtime with Hono framework. Implements intelligent agent system with LLM integration, native OpenAI/MCP tool calling, Anthropic Agent Skills support, real-time task history tracking, and human-in-the-loop confirmation. Features user-isolated MCP sessions with Playwright storage state persistence.
 
 ## Tech Stack
 
@@ -11,6 +11,8 @@ AI Agent API service built on Bun runtime with Hono framework. Implements intell
 - **Language**: TypeScript (strict mode)
 - **Package Manager**: Bun
 - **Database**: Prisma with SQLite (default, supports PostgreSQL)
+- **MCP SDK**: @modelcontextprotocol/sdk (^1.25.3)
+- **Skills Format**: YAML frontmatter + Markdown
 
 ## Commands
 
@@ -160,13 +162,22 @@ src/
 │   ├── prompt.ts         # System prompt templates (with/without thinking)
 │   ├── types.ts          # TypeScript interfaces/enums (AgentStatus, MessageRole, etc.)
 │   ├── routes.ts         # Agent API endpoints (/run, /confirm, /state, /tools)
+│   ├── mcp/
+│   │   ├── index.ts      # MCP module exports (client, adapter, config)
+│   │   ├── client.ts      # MCP client factory (shared & user-isolated)
+│   │   ├── adapter.ts     # MCP tool to OpenAI tool format conversion
+│   │   └── config.ts      # MCP server configurations (filesystem, playwright)
+│   ├── skills/
+│   │   ├── index.ts      # Skill loader with YAML frontmatter parsing
+│   │   └── routes.ts      # Skill API endpoints (/skills, /skills/:name, /skills/:name/bundle)
 │   └── tools/
-│       ├── index.ts      # Tool registry, validation, OpenAI format conversion
-│       └── web.ts        # Web tools (web_fetch, web_search)
+│       ├── index.ts      # Tool registry, MCP tool integration, handler dispatch
+│       └── system-tool.ts # Built-in system tools (read_file, search_file_content, etc.)
 ├── database/
 │   ├── db.ts             # Prisma client re-exports
 │   ├── task-queue.ts     # TaskQueue CRUD, task claiming with locking, stats
-│   └── task-record.ts    # TaskRecord persistence, history management
+│   ├── task-record.ts    # TaskRecord persistence, history management
+│   └── mcp-session.ts    # User session persistence for Playwright storage state
 └── queue/
     ├── routes.ts         # Queue API endpoints (/tasks/:id, /stats)
     └── worker-pool.ts    # Background task workers, concurrency control, stale task recovery
@@ -176,10 +187,11 @@ src/
 
 - **Agent**: Closure-based factory with `{ run, getState, confirmAction }`, supports `thinkingMode` and progress callbacks
 - **LLM Client**: Functional factory with optional config overrides, supports streaming via `streamChat`
-- **Tools**: Static definitions with handler registry, converted to OpenAI tool format automatically
+- **MCP Client**: Dual-mode (shared & user-isolated) with session state persistence
+- **Tools**: Unified system (system tools + MCP tools), auto-converted to OpenAI format
+- **Skills**: YAML frontmatter + Markdown definitions with allowed-tools scoping
 - **Routes**: Hono chainable API with inline handlers
-- **Database**: TaskRecord with unified TaskHistory (role/content/iteration/timestamp), TaskQueue with priority and worker tracking
-- **Worker Pool**: Background processing with configurable concurrency, SQLite/PostgreSQL optimizations, stale task recovery
+- **Database**: TaskRecord with unified TaskHistory, TaskQueue with priority/worker tracking, UserSession for MCP state
 
 ## Data Models
 
@@ -208,14 +220,30 @@ Queue management for background task processing:
 - `maxAttempts`: Maximum retry attempts (default: 3)
 - Indexed for efficient pending task discovery
 
+### User
+
+User entity for multi-user support with session isolation.
+
+### UserSession
+
+Playwright MCP storage state persistence:
+
+- `userId`: Unique user identifier (1:1 with User)
+- `storageState`: JSON string containing browser cookies and origins
+- Used by user-isolated MCP clients to restore browser sessions
+
 ## API Endpoints
 
 ```
 GET  /                    # Health check
 POST /agent/run           # Queue a new agent task
-POST /agent/confirm       # Confirm or reject pending action
+POST /agent/confirm      # Confirm or reject pending action
 GET  /agent/state         # Get task state from database or memory
 GET  /agent/tools         # List available tools in OpenAI format
+GET  /skills              # List all available skills (metadata only)
+GET  /skills/:name        # Get skill metadata and full content
+GET  /skills/:name/bundle # Get skill bundle (scripts, references, examples)
+GET  /skills/:name/file/* # Get skill resource file
 GET  /queue/tasks/:id     # Get task queue status
 GET  /queue/stats         # Get queue statistics (pending/processing/completed/failed)
 ```
@@ -232,6 +260,35 @@ Environment variables via `.env` files (managed by @dotenvx/dotenvx):
 - `AGENT_UNCERTAINTY_THRESHOLD` - Confirmation threshold (default: 0.5)
 - `DATABASE_URL` - Database connection (default: file:./dev.db)
 - `DATABASE_PROVIDER` - Database type: `sqlite` or `postgresql` (auto-detected from DATABASE_URL)
+- `SKILLS_PATH` - Path to skills directory (default: ./skills)
+- `PLAYWRIGHT_SESSION_SYNC_INTERVAL_MS` - Session sync interval ms (default: 30000)
+
+### MCP Server Configuration
+
+MCP servers are configured in `src/agent/mcp/config.ts`:
+
+```typescript
+export const mcpServers: MCPServerConfig[] = [
+    {
+        name: 'filesystem',
+        enabled: true,
+        transport: 'stdio',
+        stdio: {
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
+        },
+    },
+    {
+        name: 'playwright',
+        enabled: true,
+        transport: 'stdio',
+        stdio: {
+            command: 'npx',
+            args: ['-y', '@playwright/mcp@latest'],
+        },
+    },
+]
+```
 
 ## Agent Features
 
@@ -257,10 +314,63 @@ Agent automatically detects uncertainty and requests confirmation when:
 Native OpenAI tool calling support with:
 
 - Automatic argument validation
-- Tool registry with static definitions
+- Unified tool registry (system + MCP)
 - Handler-based execution
-- Web fetch and search tools built-in
-- Extensible tool system
+- MCP tools: filesystem (read_file), playwright (browser automation)
+- System tools: read_file, search_file_content, run_shell_command
+- Extensible tool system with `toolHandlers` map
+
+### MCP Integration
+
+**Model Context Protocol** support with:
+
+- **Shared Clients**: Global MCP server connections (filesystem, playwright)
+- **User-Isolated Clients**: Per-user MCP sessions with:
+  - Isolated browser storage directories
+  - Playwright storage state persistence to database
+  - Periodic sync (configurable interval)
+  - Session restore on reconnect
+
+**MCP Tool Naming**: MCP tools are prefixed with server name:
+
+- `filesystem_read_file`, `filesystem_list_directory`, `filesystem_read_file_image`
+- `playwright_navigate`, `playwright_click`, `playwright_screenshot`
+
+### Anthropic Agent Skills
+
+Skills are markdown files with YAML frontmatter defining agent capabilities:
+
+```yaml
+---
+name: code-review
+description: Use this skill for any code review task...
+license: MIT
+allowed-tools: read_file search_file_content run_shell_command
+version: 1.0.0
+---
+
+# Code Review Skill
+
+## When to Use
+...
+
+## Review Process
+...
+```
+
+**Skill Structure**:
+
+- `skills/{skill-name}/SKILL.md` - Main skill definition
+- `skills/{skill-name}/scripts/` - Executable scripts
+- `skills/{skill-name}/references/` - Reference documentation
+- `skills/{skill-name}/examples/` - Example files
+
+**Skill API**:
+
+- List all skills: `GET /skills`
+- Get skill content: `GET /skills/:name`
+- Get bundle: `GET /skills/:name/bundle`
+- Get resource file: `GET /skills/:name/file/*`
 
 ### Real-time History Tracking
 
