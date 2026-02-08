@@ -24,6 +24,7 @@ import {
     getMCPToolHandler,
 } from './tools'
 import { getSkillByName } from './skills'
+import { logger } from '../utils/logger'
 
 interface Agent {
     run: (input: AgentInput) => Promise<AgentOutput>
@@ -202,6 +203,7 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
         ]
 
         while (state.currentIteration < effectiveMaxIterations) {
+            logger.debug('Agent', `Iteration ${state.currentIteration}/${effectiveMaxIterations}`)
             let taskHistory: AgentHistoryEntry = {
                 iteration: state.currentIteration,
                 timestamp: Date.now(),
@@ -213,7 +215,9 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                 state.history.push(taskHistory)
                 const response = await think()
                 taskHistory.content = response.content
-                if (shouldAskForConfirmation(response.content)) {
+                const shouldConfirm = shouldAskForConfirmation(response.content)
+                logger.debug('Agent', `Should ask for confirmation: ${shouldConfirm}`)
+                if (shouldConfirm) {
                     state.requiresHumanConfirmation = true
                     state.status = AgentStatus.AwaitingConfirmation
                     if (onProgress) await onProgress(taskHistory)
@@ -223,6 +227,7 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                 if (!response.toolCalls || response.toolCalls.length === 0) {
                     state.status = AgentStatus.Completed
                     taskHistory.role = MessageRole.Assistant
+                    logger.debug('Agent', `Completed without tool calls at iteration ${state.currentIteration}`)
                     if (onProgress) await onProgress(taskHistory)
                     return {
                         response: response.content,
@@ -233,6 +238,9 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                 }
 
                 const toolCall = response.toolCalls[0]!
+                const toolName = toolCall.function.name
+                const isMCP = toolName.includes('_')
+                logger.debug('Agent', `Tool call: ${toolName} (${isMCP ? 'MCP' : 'system'})`)
                 const toolResult = await act(toolCall)
 
                 if (!toolResult.success) {

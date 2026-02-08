@@ -9,6 +9,7 @@ import { createAgent } from '../agent'
 import { AgentInput, AgentStatus } from '../agent/types'
 import { TaskQueue } from '@prisma/client'
 import { cleanupIsolatedMCPClient } from '../agent/mcp/index.js'
+import { logger } from '../utils/logger'
 
 const provider = process.env.DATABASE_PROVIDER || 'sqlite'
 const isSQLite = provider === 'sqlite'
@@ -25,6 +26,7 @@ const processTask = async (
         onTaskError: (task: TaskQueue, error: Error) => void
     }
 ): Promise<void> => {
+    logger.debug('WorkerPool', `Starting to process task ${task.id}`)
     try {
         const existingRecord = await getTaskRecord(task.userId, task.taskRecordId)
         const historyList = existingRecord?.history || []
@@ -54,6 +56,7 @@ const processTask = async (
         })
 
         await completeTask(task.id, true)
+        logger.debug('WorkerPool', `Completed task ${task.id} successfully`)
         callbacks.onTaskComplete(task, true)
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
@@ -65,7 +68,7 @@ const processTask = async (
         await completeTask(task.id, false, errorMessage)
         callbacks.onTaskComplete(task, false, errorMessage)
         callbacks.onTaskError(task, error as Error)
-        console.error(`[WorkerPool] Task ${task.id} failed:`, errorMessage)
+        logger.error('WorkerPool', `Task ${task.id} failed: ${errorMessage}`)
     } finally {
         if (task.userId) {
             await cleanupIsolatedMCPClient(task.userId)
@@ -104,6 +107,7 @@ const runWorker = (
                 backoffMs = 1000
                 state.workers.set(workerName, true)
                 options.onTaskStart(task)
+                logger.debug('WorkerPool', `Retrieved task ${task.id} for user ${task.userId}`)
 
                 await processTask(task, {
                     onTaskComplete: options.onTaskComplete,
@@ -163,7 +167,7 @@ export const createWorkerPool = (options: WorkerPoolOptions = {}): WorkerPool =>
         if (state.running) return
 
         state.running = true
-        console.log(`[WorkerPool] Starting with ${effectiveOptions.concurrency} workers (provider: ${provider})`)
+        logger.info('WorkerPool', `Starting with ${effectiveOptions.concurrency} workers (provider: ${provider})`)
 
         await recoverStaleTasks(effectiveOptions.staleThresholdMs)
 
@@ -205,7 +209,7 @@ export const createWorkerPool = (options: WorkerPoolOptions = {}): WorkerPool =>
             }, 100)
         })
 
-        console.log('[WorkerPool] Stopped')
+        logger.info('WorkerPool', 'Stopped')
     }
 
     const isRunning = (): boolean => state.running
