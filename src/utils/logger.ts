@@ -1,10 +1,9 @@
 import pino from 'pino'
+import { join } from 'path'
 
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info'
 const LOG_FILE_ENABLED = process.env.LOG_FILE_ENABLED === 'true'
 const LOG_FILE = process.env.LOG_FILE || './logs/app.log'
-const LOG_FILE_MAX_SIZE = parseInt(process.env.LOG_FILE_MAX_SIZE || '10485760', 10)
-const LOG_FILE_MAX_BACKUPS = parseInt(process.env.LOG_FILE_MAX_BACKUPS || '5', 10)
 
 type LogLevel = 'debug' | 'info' | 'error'
 
@@ -30,11 +29,11 @@ const createTransport = () => {
     if (LOG_FILE_ENABLED) {
         targets.push({
             level: getLogLevel(),
-            target: 'pino-rotating-file-stream',
+            target: 'pino-roll',
             options: {
-                destination: LOG_FILE,
-                maxSize: LOG_FILE_MAX_SIZE,
-                maxFiles: LOG_FILE_MAX_BACKUPS,
+                file: join(process.cwd(), LOG_FILE),
+                size: '10m',
+                count: 10,
                 mkdir: true,
             },
         })
