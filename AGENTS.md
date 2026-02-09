@@ -13,6 +13,7 @@ AI Agent API service built on Bun runtime with Hono framework. Implements intell
 - **Database**: Prisma with SQLite (default, supports PostgreSQL)
 - **MCP SDK**: @modelcontextprotocol/sdk (^1.25.3)
 - **Skills Format**: YAML frontmatter + Markdown
+- **Logging**: Pino with rotating file support
 
 ## Commands
 
@@ -155,16 +156,18 @@ return {
 ```
 src/
 ├── index.ts              # Hono app, route config, middleware, worker pool startup
+├── utils/
+│   └── logger.ts         # Pino-based structured logging with file rotation
 ├── agent/
 │   ├── index.ts          # Agent factory (createAgent) with thinking mode support
 │   ├── client.ts         # LLM client (createLLMClient) with streaming support
 │   ├── config.ts         # Environment config (getAgentConfig, config)
 │   ├── prompt.ts         # System prompt templates (with/without thinking)
 │   ├── types.ts          # TypeScript interfaces/enums (AgentStatus, MessageRole, etc.)
-│   ├── routes.ts         # Agent API endpoints (/run, /confirm, /state, /tools)
+│   ├── routes.ts         # Agent API endpoints (/run, /confirm, /state, /tools, /history)
 │   ├── mcp/
 │   │   ├── index.ts      # MCP module exports (client, adapter, config)
-│   │   ├── client.ts      # MCP client factory (shared & user-isolated)
+│   │   ├── client.ts     # MCP client factory (shared & user-isolated), HTTP/SSE transport
 │   │   ├── adapter.ts     # MCP tool to OpenAI tool format conversion
 │   │   └── config.ts      # MCP server configurations (filesystem, playwright)
 │   ├── skills/
@@ -173,6 +176,8 @@ src/
 │   └── tools/
 │       ├── index.ts      # Tool registry, MCP tool integration, handler dispatch
 │       └── system-tool.ts # Built-in system tools (read_file, search_file_content, etc.)
+├── types/
+│   └── bun.d.ts          # Bun type definitions
 ├── database/
 │   ├── db.ts             # Prisma client re-exports
 │   ├── task-queue.ts     # TaskQueue CRUD, task claiming with locking, stats
@@ -185,13 +190,14 @@ src/
 
 ### Key Patterns
 
-- **Agent**: Closure-based factory with `{ run, getState, confirmAction }`, supports `thinkingMode` and progress callbacks
+- **Agent**: Closure-based factory with `{ run, getState, confirmAction }`, supports `thinkingMode` and progress callbacks, `activeSkills` for skill activation
 - **LLM Client**: Functional factory with optional config overrides, supports streaming via `streamChat`
-- **MCP Client**: Dual-mode (shared & user-isolated) with session state persistence
+- **MCP Client**: Dual-mode (shared & user-isolated) with session state persistence, HTTP/SSE transport support
 - **Tools**: Unified system (system tools + MCP tools), auto-converted to OpenAI format
-- **Skills**: YAML frontmatter + Markdown definitions with allowed-tools scoping
+- **Skills**: YAML frontmatter + Markdown definitions with allowed-tools scoping, skill activation at runtime
 - **Routes**: Hono chainable API with inline handlers
 - **Database**: TaskRecord with unified TaskHistory, TaskQueue with priority/worker tracking, UserSession for MCP state
+- **Logging**: Pino-based structured logging with file rotation support
 
 ## Data Models
 
@@ -208,17 +214,21 @@ Unified history entries with role and content fields:
 - `iteration`: Optional, only for assistant/tool entries
 - `timestamp`: Recorded via `createdAt` in database
 - Ordered by `createdAt` to reconstruct conversation
+- Indexed by taskRecordId + createdAt and taskRecordId + role for efficient queries
 
 ### TaskQueue
 
 Queue management for background task processing:
 
+- `id`: Unique task identifier (UUID)
+- `userId`: User identifier for task isolation
+- `taskRecordId`: Reference to associated TaskRecord
 - `status`: Task lifecycle state (`pending` | `processing` | `completed` | `failed`)
 - `priority`: Execution priority (higher = processed first)
 - `workerId`: ID of worker processing the task
 - `attempts`: Number of processing attempts
 - `maxAttempts`: Maximum retry attempts (default: 3)
-- Indexed for efficient pending task discovery
+- Indexed for efficient pending task discovery and compound queries by userId + taskRecordId + status
 
 ### User
 
@@ -239,6 +249,7 @@ GET  /                    # Health check
 POST /agent/run           # Queue a new agent task
 POST /agent/confirm      # Confirm or reject pending action
 GET  /agent/state         # Get task state from database or memory
+GET  /agent/history      # Get task history entries (optional role filter)
 GET  /agent/tools         # List available tools in OpenAI format
 GET  /skills              # List all available skills (metadata only)
 GET  /skills/:name        # Get skill metadata and full content
@@ -262,6 +273,10 @@ Environment variables via `.env` files (managed by @dotenvx/dotenvx):
 - `DATABASE_PROVIDER` - Database type: `sqlite` or `postgresql` (auto-detected from DATABASE_URL)
 - `SKILLS_PATH` - Path to skills directory (default: ./skills)
 - `PLAYWRIGHT_SESSION_SYNC_INTERVAL_MS` - Session sync interval ms (default: 30000)
+- `PLAYWRIGHT_MCP_USER_DATA_DIR` - Base directory for user Playwright data (default: /tmp/loomos-mcp)
+- `LOG_LEVEL` - Logging level (default: info)
+- `LOG_FILE_ENABLED` - Enable file logging (default: false)
+- `LOG_FILE` - Log file path (default: ./logs/app.log)
 
 ### MCP Server Configuration
 
@@ -287,8 +302,21 @@ export const mcpServers: MCPServerConfig[] = [
             args: ['-y', '@playwright/mcp@latest'],
         },
     },
+    {
+        name: 'remote-server',
+        enabled: true,
+        transport: 'http',
+        http: {
+            url: 'http://localhost:3000/sse',
+        },
+    },
 ]
 ```
+
+**Transport Types**:
+
+- `stdio`: Local process communication via standard input/output
+- `http`: Remote server communication via SSE (Server-Sent Events)
 
 ## Agent Features
 
@@ -308,6 +336,16 @@ Agent automatically detects uncertainty and requests confirmation when:
 - Ethical concerns
 - Missing critical information
 - Unexpected results
+
+**Agent States**:
+
+- `idle`: Agent is not currently running
+- `thinking`: Agent is reasoning about the task
+- `awaiting_action`: Waiting for user input or action
+- `awaiting_confirmation`: Waiting for human approval of an action
+- `executing`: Running tools or performing actions
+- `completed`: Task finished successfully
+- `error`: An error occurred during execution
 
 ### Tool Calling
 
@@ -330,6 +368,7 @@ Native OpenAI tool calling support with:
   - Playwright storage state persistence to database
   - Periodic sync (configurable interval)
   - Session restore on reconnect
+  - Automatic cleanup on disconnect
 
 **MCP Tool Naming**: MCP tools are prefixed with server name:
 
