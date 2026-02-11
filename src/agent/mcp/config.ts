@@ -22,7 +22,7 @@ export const mcpServers: MCPServerConfig[] = [
         transport: 'stdio',
         stdio: {
             command: 'npx',
-            args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
+            args: ['-y', '@modelcontextprotocol/server-filesystem', homedir()],
         },
     },
     {

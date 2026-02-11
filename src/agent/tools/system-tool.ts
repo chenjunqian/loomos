@@ -1,42 +1,7 @@
 import { Tool, ToolResult } from '../types'
+import { glob } from 'glob'
 
 export const systemTools: Tool[] = [
-    // {
-    //     name: 'web_fetch',
-    //     description: 'Fetch content from a URL. Returns the text content of the page.',
-    //     parameters: {
-    //         type: 'object',
-    //         properties: {
-    //             url: {
-    //                 type: 'string',
-    //                 description: 'The URL to fetch',
-    //             },
-    //             options: {
-    //                 type: 'string',
-    //                 description: 'Optional JSON object with fetch options (method, headers, body)',
-    //             },
-    //         },
-    //         required: ['url'],
-    //     },
-    // },
-    // {
-    //     name: 'web_search',
-    //     description: 'Search the web for information using a search engine.',
-    //     parameters: {
-    //         type: 'object',
-    //         properties: {
-    //             query: {
-    //                 type: 'string',
-    //                 description: 'The search query',
-    //             },
-    //             numResults: {
-    //                 type: 'string',
-    //                 description: 'Number of results to return (default: 5)',
-    //             },
-    //         },
-    //         required: ['query'],
-    //     },
-    // },
     {
         name: 'ask_user',
         description: 'Ask the user for clarification, feedback, or additional information. Returns questions in JSON format for easy UI rendering.',
@@ -53,6 +18,76 @@ export const systemTools: Tool[] = [
                 },
             },
             required: ['questions'],
+        },
+    },
+    {
+        name: 'glob',
+        description: 'Find files matching a glob pattern. Returns absolute paths of matching files.',
+        parameters: {
+            type: 'object',
+            properties: {
+                pattern: {
+                    type: 'string',
+                    description: 'Glob pattern (e.g., "**/*.ts", "src/**/*.json")',
+                },
+                path: {
+                    type: 'string',
+                    description: 'Base directory to search in (defaults to current working directory)',
+                },
+            },
+            required: ['pattern'],
+        },
+    },
+    {
+        name: 'grep',
+        description: 'Search file contents using regular expressions. Returns matching lines with line numbers.',
+        parameters: {
+            type: 'object',
+            properties: {
+                pattern: {
+                    type: 'string',
+                    description: 'Regular expression pattern to search for',
+                },
+                path: {
+                    type: 'string',
+                    description: 'Directory to search in (defaults to current working directory)',
+                },
+                include: {
+                    type: 'string',
+                    description: 'File pattern to include (e.g., "*.ts", "*.{ts,js}")',
+                },
+                recursive: {
+                    type: 'string',
+                    description: 'Search recursively (default: true)',
+                },
+            },
+            required: ['pattern'],
+        },
+    },
+    {
+        name: 'bash',
+        description: 'Execute a shell command. Returns command output. Use with caution - commands run in the working directory.',
+        parameters: {
+            type: 'object',
+            properties: {
+                command: {
+                    type: 'string',
+                    description: 'Shell command to execute',
+                },
+                description: {
+                    type: 'string',
+                    description: 'Brief description of what this command does',
+                },
+                timeout: {
+                    type: 'string',
+                    description: 'Timeout in milliseconds (default: 60000)',
+                },
+                workdir: {
+                    type: 'string',
+                    description: 'Working directory for the command (defaults to current working directory)',
+                },
+            },
+            required: ['command'],
         },
     },
 ]
@@ -183,11 +218,165 @@ export async function askUser(args: AskUserArgs): Promise<ToolResult> {
 }
 
 export const systemToolHandlers: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
-    // web_fetch: async (args) => webFetch(args.url as string, args.options as string),
-    // web_search: async (args) => webSearch(args.query as string, args.numResults as string),
     ask_user: async (args) => {
         const questionsStr = args.questions as string
         const questions = JSON.parse(questionsStr)
         return askUser({ questions, context: args.context as string })
+    },
+    glob: async (args) => {
+        const pattern = args.pattern as string
+        const path = args.path as string | undefined
+
+        try {
+            const baseDir = path || process.cwd()
+            const globPattern = pattern.startsWith('/') || pattern.includes(':')
+                ? pattern
+                : `${baseDir}/${pattern}`
+
+            const matches = await glob(globPattern, { absolute: true })
+            matches.sort()
+
+            return {
+                success: true,
+                content: matches.length > 0
+                    ? `Found ${matches.length} file(s):\n\n${matches.join('\n')}`
+                    : 'No files found matching the pattern.',
+            }
+        } catch (error) {
+            return {
+                success: false,
+                content: '',
+                error: error instanceof Error ? error.message : 'Unknown error during glob search',
+            }
+        }
+    },
+    grep: async (args) => {
+        const pattern = args.pattern as string
+        const path = args.path as string | undefined
+        const include = args.include as string | undefined
+        const recursive = args.recursive !== 'false'
+
+        try {
+            const baseDir = path || process.cwd()
+            const results: string[] = []
+            const regex = new RegExp(pattern)
+
+            const searchDir = async (dir: string, depth: number) => {
+                if (recursive && depth > 50) return
+
+                const entries = await glob('*', { cwd: dir, absolute: true })
+                const dirs: string[] = []
+
+                for (const entry of entries) {
+                    const stat = await Bun.file(entry).stat()
+
+                    if (stat.isDirectory()) {
+                        if (recursive) {
+                            dirs.push(entry)
+                        }
+                    } else if (stat.isFile()) {
+                        if (include) {
+                            const globPattern = include.startsWith('!')
+                                ? include.slice(1)
+                                : include
+                            const globFiles = await glob(globPattern, { cwd: dir })
+                            const matches = globFiles.some(f => entry.endsWith(f))
+                            if (!matches && !include.startsWith('!')) {
+                                continue
+                            }
+                        }
+
+                        try {
+                            const content = await Bun.file(entry).text()
+                            const lines = content.split('\n')
+                            lines.forEach((line, index) => {
+                                if (regex.test(line)) {
+                                    const relativePath = entry.replace(baseDir + '/', '')
+                                    results.push(`${relativePath}:${index + 1}: ${line.trim()}`)
+                                }
+                            })
+                        } catch {
+                        }
+                    }
+                }
+
+                for (const dirEntry of dirs) {
+                    await searchDir(dirEntry, depth + 1)
+                }
+            }
+
+            await searchDir(baseDir, 0)
+
+            return {
+                success: true,
+                content: results.length > 0
+                    ? `Found ${results.length} match(es):\n\n${results.slice(0, 100).join('\n')}${results.length > 100 ? `\n... and ${results.length - 100} more` : ''}`
+                    : 'No matches found.',
+            }
+        } catch (error) {
+            return {
+                success: false,
+                content: '',
+                error: error instanceof Error ? error.message : 'Unknown error during grep search',
+            }
+        }
+    },
+    bash: async (args) => {
+        const command = args.command as string
+        const workdir = args.workdir as string | undefined
+
+        try {
+            const childProcess = Bun.spawn({
+                cmd: ['/bin/bash', '-c', command],
+                cwd: workdir || process.cwd(),
+                stdout: 'pipe',
+                stderr: 'pipe',
+                env: {
+                    ...process.env,
+                    PATH: process.env.PATH || '/usr/bin:/bin',
+                },
+            })
+
+            const stdoutChunks: Uint8Array[] = []
+            const stderrChunks: Uint8Array[] = []
+
+            const readStream = async (stream: ReadableStream<Uint8Array>, chunks: Uint8Array[]) => {
+                const reader = stream.getReader()
+                while (true) {
+                    const { done, value } = await reader.read()
+                    if (done) break
+                    chunks.push(value)
+                }
+            }
+
+            await Promise.all([
+                readStream(childProcess.stdout!, stdoutChunks),
+                readStream(childProcess.stderr!, stderrChunks),
+            ])
+
+            const stdout = new TextDecoder('utf-8').decode(stdoutChunks.length > 0 ? stdoutChunks.reduce((a, b) => new Uint8Array([...a, ...b])) : new Uint8Array())
+            const stderr = new TextDecoder('utf-8').decode(stderrChunks.length > 0 ? stderrChunks.reduce((a, b) => new Uint8Array([...a, ...b])) : new Uint8Array())
+            const exitCode = childProcess.exitCode
+            const combinedOutput = [stdout, stderr].filter(Boolean).join('\n')
+
+            if (exitCode !== 0) {
+                return {
+                    success: false,
+                    content: combinedOutput,
+                    error: `Command exited with code ${exitCode}`,
+                }
+            }
+
+            return {
+                success: true,
+                content: combinedOutput.slice(0, 50000) || 'Command executed successfully (no output)',
+            }
+        } catch (error) {
+            return {
+                success: false,
+                content: '',
+                error: error instanceof Error ? error.message : 'Unknown error executing command',
+            }
+        }
     },
 }
