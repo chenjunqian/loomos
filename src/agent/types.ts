@@ -128,12 +128,7 @@ export interface LLMResponse {
 export interface SkillMetadata {
     name: string
     description: string
-    license?: string
-    allowedTools?: string[]
     model?: string
-    version?: string
-    compatibility?: string
-    metadata?: Record<string, unknown>
 }
 
 export interface Skill {

@@ -9,8 +9,6 @@ skillsRoutes.get('/skills', async (c) => {
     return c.json(skills.map(skill => ({
         name: skill.metadata.name,
         description: skill.metadata.description,
-        version: skill.metadata.version,
-        license: skill.metadata.license,
     })))
 })
 

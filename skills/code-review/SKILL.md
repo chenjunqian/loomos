@@ -1,9 +1,6 @@
 ---
 name: code-review
 description: Use this skill for any code review task, including pull request reviews, refactoring suggestions, and code quality analysis.
-license: MIT
-allowed-tools: read_file,search_file_content,run_shell_command
-version: 1.0.0
 ---
 
 # Code Review Skill

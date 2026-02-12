@@ -60,12 +60,7 @@ async function loadSkill(skillPath: string): Promise<Skill | null> {
     const metadata: SkillMetadata = {
         name: frontmatter.name as string,
         description: frontmatter.description as string,
-        license: frontmatter.license as string | undefined,
-        allowedTools: frontmatter['allowed-tools'] ? (frontmatter['allowed-tools'] as string).split(' ').filter(Boolean) : undefined,
         model: frontmatter.model as string | undefined,
-        version: frontmatter.version as string | undefined,
-        compatibility: frontmatter.compatibility as string | undefined,
-        metadata: frontmatter.metadata as Record<string, unknown> | undefined,
     }
 
     if (!metadata.name || !metadata.description) {
