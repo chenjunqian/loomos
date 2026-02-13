@@ -1,5 +1,77 @@
 import { TaskRecord, AgentStatus, AgentHistoryEntry, MessageRole } from '../agent/types'
-import { prisma, TASK_STATUS } from './task-queue'
+import { getDatabaseProvider, prisma, TASK_STATUS } from './task-queue'
+
+export async function initializeFTS(): Promise<void> {
+    const provider = getDatabaseProvider()
+
+    try {
+        if (provider === 'sqlite') {
+            await prisma.$executeRaw`
+                CREATE VIRTUAL TABLE IF NOT EXISTS task_history_fts USING fts5(
+                    content,
+                    task_record_id UNINDEXED,
+                    role UNINDEXED
+                )
+            `
+            await prisma.$executeRaw`
+                CREATE TRIGGER IF NOT EXISTS task_history_ai AFTER INSERT ON TaskHistory BEGIN
+                    INSERT INTO task_history_fts(content, task_record_id, role)
+                    VALUES (NEW.content, NEW.task_record_id, NEW.role);
+                END
+            `
+            await prisma.$executeRaw`
+                CREATE TRIGGER IF NOT EXISTS task_history_ad AFTER DELETE ON TaskHistory BEGIN
+                    INSERT INTO task_history_fts(task_history_fts, content, task_record_id, role)
+                    VALUES ('delete', OLD.content, OLD.task_record_id, OLD.role);
+                END
+            `
+            await prisma.$executeRaw`
+                CREATE TRIGGER IF NOT EXISTS task_history_au AFTER UPDATE ON TaskHistory BEGIN
+                    INSERT INTO task_history_fts(task_history_fts, content, task_record_id, role)
+                    VALUES ('delete', OLD.content, OLD.task_record_id, OLD.role);
+                    INSERT INTO task_history_fts(content, task_record_id, role)
+                    VALUES (NEW.content, NEW.task_record_id, NEW.role);
+                END
+            `
+        } else if (provider === 'postgresql') {
+            await prisma.$executeRaw`
+                ALTER TABLE "TaskHistory" ADD COLUMN IF NOT EXISTS content_fts tsvector
+                GENERATED ALWAYS AS (to_tsvector('english', "content")) STORED
+            `
+            await prisma.$executeRaw`
+                CREATE INDEX IF NOT EXISTS "idx_task_history_fts" 
+                ON "TaskHistory" USING GIN (content_fts)
+            `
+            await prisma.$executeRaw`
+                CREATE OR REPLACE FUNCTION task_history_fts_update()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    NEW.content_fts := to_tsvector('english', NEW.content);
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql
+            `
+            const triggerExists = await prisma.$queryRaw<{ exists: boolean }[]>`
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.triggers 
+                    WHERE trigger_name = 'task_history_fts_trigger'
+                ) as exists
+            `
+            if (!triggerExists[0]?.exists) {
+                await prisma.$executeRaw`
+                    CREATE TRIGGER task_history_fts_trigger
+                    BEFORE INSERT OR UPDATE ON "TaskHistory"
+                    FOR EACH ROW
+                    EXECUTE FUNCTION task_history_fts_update()
+                `
+            }
+        }
+    } catch (error) {
+        console.error('[FTS] Failed to initialize FTS tables:', error)
+    }
+}
+
+initializeFTS()
 
 export interface CreateTaskRecordInput {
     id?: string
@@ -144,6 +216,73 @@ export async function getTaskHistory(
         content: entry.content,
         iteration: entry.iteration ?? undefined,
         timestamp: entry.createdAt.getTime(),
+    }))
+}
+
+export interface HistorySearchResult {
+    taskRecordId: string
+    role: string
+    content: string
+    timestamp: number
+}
+
+export async function searchTaskHistory(
+    userId: string,
+    query: string,
+    limit: number = 5
+): Promise<HistorySearchResult[]> {
+    const provider = getDatabaseProvider()
+
+    let results: HistorySearchResult[]
+
+    if (provider === 'sqlite') {
+        const escapedQuery = query.replace(/"/g, '""')
+
+        results = await prisma.$queryRaw<HistorySearchResult[]>`
+            SELECT 
+                h.task_record_id as "taskRecordId",
+                h.role,
+                h.content,
+                h.created_at as "timestamp"
+            FROM task_history h
+            INNER JOIN task_record t ON h.task_record_id = t.id
+            WHERE t.user_id = ${userId}
+                AND h.role IN ('user', 'assistant')
+                AND h.id IN (
+                    SELECT id FROM task_history 
+                    WHERE task_record_id = h.task_record_id 
+                    AND rowid = (
+                        SELECT rowid FROM task_history_fts 
+                        WHERE task_history_fts MATCH ${`"${escapedQuery}"`}
+                        AND task_record_id = h.task_record_id
+                        LIMIT 1
+                    )
+                )
+            ORDER BY h.created_at DESC
+            LIMIT ${limit}
+        `
+    } else {
+        results = await prisma.$queryRaw<HistorySearchResult[]>`
+            SELECT 
+                h."taskRecordId",
+                h.role,
+                h.content,
+                EXTRACT(EPOCH FROM h."createdAt") * 1000 as "timestamp"
+            FROM "TaskHistory" h
+            INNER JOIN "TaskRecord" t ON h."taskRecordId" = t.id
+            WHERE t."userId" = ${userId}
+                AND h.role IN ('user', 'assistant')
+                AND h.content_fts @@ plainto_tsquery('english', ${query})
+            ORDER BY ts_rank(h.content_fts, plainto_tsquery('english', ${query})) DESC
+            LIMIT ${limit}
+        `
+    }
+
+    return results.map((r) => ({
+        taskRecordId: r.taskRecordId,
+        role: r.role,
+        content: r.content,
+        timestamp: new Date(r.timestamp).getTime(),
     }))
 }
 

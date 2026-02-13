@@ -1,5 +1,6 @@
 import { Tool, ToolResult } from '../types'
 import { glob } from 'glob'
+import { searchTaskHistory } from '../../database/task-record'
 
 export const systemTools: Tool[] = [
     {
@@ -88,6 +89,24 @@ export const systemTools: Tool[] = [
                 },
             },
             required: ['command'],
+        },
+    },
+    {
+        name: 'search_history',
+        description: 'Search your past task history for relevant context. Only searches user messages and assistant responses (not tool results). Returns formatted history snippets for context.',
+        parameters: {
+            type: 'object',
+            properties: {
+                query: {
+                    type: 'string',
+                    description: 'Search query - keywords or phrases to search for in history',
+                },
+                limit: {
+                    type: 'string',
+                    description: 'Maximum number of results to return (default: 5)',
+                },
+            },
+            required: ['query'],
         },
     },
 ]
@@ -376,6 +395,46 @@ export const systemToolHandlers: Record<string, (args: Record<string, unknown>) 
                 success: false,
                 content: '',
                 error: error instanceof Error ? error.message : 'Unknown error executing command',
+            }
+        }
+    },
+    search_history: async (args, userId?: string) => {
+        const query = args.query as string
+        const limit = args.limit ? parseInt(args.limit as string, 10) : 5
+
+        if (!userId) {
+            return {
+                success: false,
+                content: '',
+                error: 'userId is required for history search',
+            }
+        }
+
+        try {
+            const results = await searchTaskHistory(userId, query, limit)
+
+            if (results.length === 0) {
+                return {
+                    success: true,
+                    content: 'No relevant history found for the given query.',
+                }
+            }
+
+            const formatted = results.map((r) => {
+                const date = new Date(r.timestamp).toLocaleString()
+                const roleLabel = r.role === 'user' ? 'user' : 'assistant'
+                return `## Task: ${r.taskRecordId.slice(0, 8)}... @ ${date}\n**Role:** ${roleLabel}\n${r.content}`
+            }).join('\n\n---\n\n')
+
+            return {
+                success: true,
+                content: `=== RELATED HISTORY ===\n\n${formatted}\n\n===`,
+            }
+        } catch (error) {
+            return {
+                success: false,
+                content: '',
+                error: error instanceof Error ? error.message : 'Unknown error during history search',
             }
         }
     },

@@ -112,7 +112,7 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
             return result
         }
 
-        const result = await callToolHandler(toolCall.function.name, args)
+        const result = await callToolHandler(toolCall.function.name, args, userId)
 
         const entry: AgentHistoryEntry = {
             iteration: state.currentIteration,

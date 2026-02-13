@@ -34,7 +34,7 @@ export async function createTaskForQueue(input: CreateTaskInput): Promise<TaskQu
     })
 }
 
-function getDatabaseProvider(): string {
+export function getDatabaseProvider(): string {
     const url = process.env.DATABASE_URL || 'file:./dev.db'
     if (url.includes('postgresql:') || url.includes('postgres:')) {
         return 'postgresql'

@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// FTS5 Virtual Tables (created via raw SQL on startup)
+// - task_history_fts: FTS5 index on TaskHistory.content for full-text search
+// - Triggers: task_history_ai (after insert), task_history_ad (after delete), task_history_au (after update)
+// Note: FTS5 virtual tables cannot be modeled in Prisma schema - managed in src/database/task-record.ts
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique

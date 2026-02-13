@@ -50,7 +50,7 @@ export function toolsToOpenAIFormat(tools: Tool[]): OpenAITool[] {
 
 export const allTools: Tool[] = [...systemTools]
 
-export const toolHandlers: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
+export const toolHandlers: Record<string, (args: Record<string, unknown>, userId?: string) => Promise<ToolResult>> = {
     ...systemToolHandlers,
 }
 
@@ -159,10 +159,10 @@ export async function validateToolCall(toolName: string, args: Record<string, un
     return { valid: true }
 }
 
-export async function callToolHandler(toolName: string, args: Record<string, unknown>): Promise<ToolResult> {
+export async function callToolHandler(toolName: string, args: Record<string, unknown>, userId?: string): Promise<ToolResult> {
     const systemHandler = toolHandlers[toolName]
     if (systemHandler) {
-        return systemHandler(args)
+        return systemHandler(args, userId)
     }
 
     return {
