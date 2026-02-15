@@ -53,7 +53,7 @@ async function ensurePlaywrightBrowsersInstalled(): Promise<void> {
     console.log('[MCP] Installing Playwright Chromium browser...')
     try {
         writeFileSync(PlaywrightBrowserLockFile, '')
-        execSync('npx playwright install chromium', {
+        execSync('npx -y playwright install chromium', {
             stdio: 'inherit',
             env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: '0' },
         })

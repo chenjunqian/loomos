@@ -16,21 +16,21 @@ export async function initializeFTS(): Promise<void> {
             await prisma.$executeRaw`
                 CREATE TRIGGER IF NOT EXISTS task_history_ai AFTER INSERT ON TaskHistory BEGIN
                     INSERT INTO task_history_fts(content, task_record_id, role)
-                    VALUES (NEW.content, NEW.task_record_id, NEW.role);
+                    VALUES (NEW.content, NEW."taskRecordId", NEW.role);
                 END
             `
             await prisma.$executeRaw`
                 CREATE TRIGGER IF NOT EXISTS task_history_ad AFTER DELETE ON TaskHistory BEGIN
                     INSERT INTO task_history_fts(task_history_fts, content, task_record_id, role)
-                    VALUES ('delete', OLD.content, OLD.task_record_id, OLD.role);
+                    VALUES ('delete', OLD.content, OLD."taskRecordId", OLD.role);
                 END
             `
             await prisma.$executeRaw`
                 CREATE TRIGGER IF NOT EXISTS task_history_au AFTER UPDATE ON TaskHistory BEGIN
                     INSERT INTO task_history_fts(task_history_fts, content, task_record_id, role)
-                    VALUES ('delete', OLD.content, OLD.task_record_id, OLD.role);
+                    VALUES ('delete', OLD.content, OLD."taskRecordId", OLD.role);
                     INSERT INTO task_history_fts(content, task_record_id, role)
-                    VALUES (NEW.content, NEW.task_record_id, NEW.role);
+                    VALUES (NEW.content, NEW."taskRecordId", NEW.role);
                 END
             `
         } else if (provider === 'postgresql') {
