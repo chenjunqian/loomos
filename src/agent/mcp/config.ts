@@ -31,7 +31,7 @@ export const mcpServers: MCPServerConfig[] = [
         transport: 'stdio',
         stdio: {
             command: 'npx',
-            args: ['-y', '@playwright/mcp@latest'],
+            args: ['-y', '@playwright/mcp@latest', '--browser', 'chromium'],
         },
     },
 ]
@@ -77,6 +77,7 @@ export function getIsolatedServerConfig(baseConfig: MCPServerConfig, userId: str
 
     if (baseConfig.name === 'playwright') {
         args.push(
+            '--browser', 'chromium',
             '--isolated',
             '--user-data-dir', userDataDir,
             '--storage-state', getUserStorageStatePath(userId)

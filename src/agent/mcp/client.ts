@@ -20,6 +20,57 @@ import {
     type StorageState,
 } from '../../database/mcp-session.js'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
+import { homedir } from 'node:os'
+
+const PlaywrightBrowserLockFile = `${homedir()}/.loomos/.playwright-install-lock`
+
+async function ensurePlaywrightBrowsersInstalled(): Promise<void> {
+    const browserCacheDir = `${homedir()}/.cache/ms-playwright`
+    const chromiumBrowserPath = `${browserCacheDir}/chromium-`
+
+    if (existsSync(chromiumBrowserPath)) {
+        return
+    }
+
+    const { writeFileSync, unlinkSync } = await import('node:fs')
+
+    const lockFileExists = existsSync(PlaywrightBrowserLockFile)
+    if (lockFileExists) {
+        console.log('[MCP] Playwright browser installation in progress by another process, waiting...')
+        let retries = 0
+        const maxRetries = 30
+        while (existsSync(PlaywrightBrowserLockFile) && retries < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 2000))
+            retries++
+        }
+        if (existsSync(chromiumBrowserPath)) {
+            return
+        }
+        console.warn('[MCP] Browser installation may have failed, will attempt to install anyway')
+    }
+
+    console.log('[MCP] Installing Playwright Chromium browser...')
+    try {
+        writeFileSync(PlaywrightBrowserLockFile, '')
+        execSync('npx playwright install chromium', {
+            stdio: 'inherit',
+            env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: '0' },
+        })
+        console.log('[MCP] Playwright Chromium installed successfully')
+    } catch (error) {
+        console.error('[MCP] Failed to install Playwright Chromium:', error)
+        throw new Error('Failed to install Playwright browser. Please run "npx playwright install chromium" manually.')
+    } finally {
+        try {
+            if (existsSync(PlaywrightBrowserLockFile)) {
+                unlinkSync(PlaywrightBrowserLockFile)
+            }
+        } catch {
+            // Ignore cleanup errors
+        }
+    }
+}
 
 interface ToolListResult {
     tools: MCPTool[]
@@ -138,6 +189,9 @@ export async function getMCPClient(config: MCPServerConfig): Promise<MCPClient> 
     let client = sharedClientCache.get(cacheKey)
 
     if (!client) {
+        if (config.name === 'playwright') {
+            await ensurePlaywrightBrowsersInstalled()
+        }
         client = createMCPClient(config)
         await client.connect()
         sharedClientCache.set(cacheKey, client)
@@ -150,6 +204,9 @@ export async function getIsolatedMCPClient(config: MCPServerConfig, userId: stri
     let client = isolatedClientCache.get(userId)
 
     if (!client) {
+        if (config.name === 'playwright') {
+            await ensurePlaywrightBrowsersInstalled()
+        }
         const isolatedConfig = getIsolatedServerConfig(config, userId)
         client = createIsolatedMCPClient(isolatedConfig, userId)
         await client.connect()
