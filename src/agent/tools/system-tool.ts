@@ -5,17 +5,17 @@ import { searchTaskHistory } from '../../database/task-record'
 export const systemTools: Tool[] = [
     {
         name: 'ask_user',
-        description: 'Ask the user for clarification, feedback, or additional information. Returns questions in JSON format for easy UI rendering.',
+        description: 'Ask the user for clarification, feedback, or additional information. Format: Question text followed by numbered options (each on a new line).',
         parameters: {
             type: 'object',
             properties: {
                 questions: {
                     type: 'string',
-                    description: 'JSON array of questions. Each question: {id, text, type?, options?}',
+                    description: 'Question text with numbered options. Example: "Which deployment strategy?\n1. Blue/Green - Zero-downtime\n2. Rolling - Gradual rollout\n3. Canary - Test 5% traffic"',
                 },
                 context: {
                     type: 'string',
-                    description: 'Optional context about why user input is needed.',
+                    description: 'Optional additional context about why user input is needed.',
                 },
             },
             required: ['questions'],
@@ -212,26 +212,17 @@ export async function webSearch(query: string, numResults?: string): Promise<Too
     }
 }
 
-export interface AskUserQuestion {
-    id: string
-    text: string
-    type?: 'text' | 'choice' | 'boolean'
-    options?: string[]
-}
-
 export interface AskUserArgs {
-    questions: AskUserQuestion[]
+    questions: string
     context?: string
 }
 
 export async function askUser(args: AskUserArgs): Promise<ToolResult> {
+    const { questions, context } = args
+    
     return {
         success: true,
-        content: JSON.stringify({
-            type: 'ask_user',
-            questions: args.questions,
-            context: args.context,
-        }),
+        content: `${questions}\n\nContext:\n${context}`,
         requiresConfirmation: true,
     }
 }
@@ -239,8 +230,7 @@ export async function askUser(args: AskUserArgs): Promise<ToolResult> {
 export const systemToolHandlers: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
     ask_user: async (args) => {
         const questionsStr = args.questions as string
-        const questions = JSON.parse(questionsStr)
-        return askUser({ questions, context: args.context as string })
+        return askUser({ questions: questionsStr, context: args.context as string })
     },
     glob: async (args) => {
         const pattern = args.pattern as string

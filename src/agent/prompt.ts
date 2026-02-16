@@ -76,54 +76,36 @@ When uncertain, **call the ask_user tool** with your questions before proceeding
 - Any situation where the user's preference matters
 
 ### ask_user Parameters
-- questions: Array of questions with id, text, type, and options
-- context: Brief explanation of why you need this input
+- questions: Question text with numbered options (each on a new line)
+- context: Optional brief explanation of why you need this input
 
-### Question Types
-| Type | Use When | Returns |
-|------|----------|---------|
-| select | User chooses ONE option from a list | Single value |
-| multi-select | User selects MULTIPLE options | Array of values |
-| text | Freeform response needed | String |
+### Format
+The questions parameter should be a simple string with the question followed by numbered options. For example:
+
+Question text here?
+1. Option 1 - description
+2. Option 2 - description
+3. Option 3
 
 ### Examples
 
 **Example 1: Choosing between options**
-{
-  "questions": [
-    {
-      "id": "strategy",
-      "text": "Which deployment strategy should I use?",
-      "type": "select",
-      "options": [
-        {"label": "Blue/Green", "description": "Zero-downtime, requires 2x resources"},
-        {"label": "Rolling", "description": "Gradual rollout, uses existing resources"},
-        {"label": "Canary", "description": "Test with 5% traffic first"}
-      ]
-    }
-  ],
-  "context": "Blue/Green enables instant rollback but costs more. Rolling is cheaper but has brief downtime."
-}
+Which deployment strategy should I use?
+1. Blue/Green - Zero-downtime, requires 2x resources
+2. Rolling - Gradual rollout, uses existing resources
+3. Canary - Test with 5% traffic first
+Context: Blue/Green enables instant rollback but costs more. Rolling is cheaper but has brief downtime.
 
-**Example 2: Gathering multiple inputs**
-{
-  "questions": [
-    {"id": "output", "text": "What output format do you prefer?", "type": "select", "options": [{"label": "JSON"}, {"label": "Markdown"}, {"label": "Plain text"}]},
-    {"id": "details", "text": "Any additional requirements?", "type": "text"}
-  ]
-}
+**Example 2: Simple question without options**
+What is the preferred output format for the report?
+Context: This will determine how the data is structured in the final output.
 
-**Example 3: Multi-select for preferences**
-{
-  "questions": [
-    {
-      "id": "features",
-      "text": "Which features should I implement?",
-      "type": "multi-select",
-      "options": [{"label": "Dark mode"}, {"label": "Export to PDF"}, {"label": "Email notifications"}]
-    }
-  ]
-}
+**Example 3: Multiple options**
+Which features should I implement first?
+1. Dark mode - User interface theme
+2. Export to PDF - Document generation
+3. Email notifications - Alert system
+4. User authentication - Security feature
 
 ## Available Tools
 
@@ -221,54 +203,36 @@ When uncertain, **call the ask_user tool** with your questions before proceeding
 - Any situation where the user's preference matters
 
 ### ask_user Parameters
-- questions: Array of questions with id, text, type, and options
-- context: Brief explanation of why you need this input
+- questions: Question text with numbered options (each on a new line)
+- context: Optional brief explanation of why you need this input
 
-### Question Types
-| Type | Use When | Returns |
-|------|----------|---------|
-| select | User chooses ONE option from a list | Single value |
-| multi-select | User selects MULTIPLE options | Array of values |
-| text | Freeform response needed | String |
+### Format
+The questions parameter should be a simple string with the question followed by numbered options. For example:
+
+Question text here?
+1. Option 1 - description
+2. Option 2 - description
+3. Option 3
 
 ### Examples
 
 **Example 1: Choosing between options**
-{
-  "questions": [
-    {
-      "id": "strategy",
-      "text": "Which deployment strategy should I use?",
-      "type": "select",
-      "options": [
-        {"label": "Blue/Green", "description": "Zero-downtime, requires 2x resources"},
-        {"label": "Rolling", "description": "Gradual rollout, uses existing resources"},
-        {"label": "Canary", "description": "Test with 5% traffic first"}
-      ]
-    }
-  ],
-  "context": "Blue/Green enables instant rollback but costs more. Rolling is cheaper but has brief downtime."
-}
+Which deployment strategy should I use?
+1. Blue/Green - Zero-downtime, requires 2x resources
+2. Rolling - Gradual rollout, uses existing resources
+3. Canary - Test with 5% traffic first
+Context: Blue/Green enables instant rollback but costs more. Rolling is cheaper but has brief downtime.
 
-**Example 2: Gathering multiple inputs**
-{
-  "questions": [
-    {"id": "output", "text": "What output format do you prefer?", "type": "select", "options": [{"label": "JSON"}, {"label": "Markdown"}, {"label": "Plain text"}]},
-    {"id": "details", "text": "Any additional requirements?", "type": "text"}
-  ]
-}
+**Example 2: Simple question without options**
+What is the preferred output format for the report?
+Context: This will determine how the data is structured in the final output.
 
-**Example 3: Multi-select for preferences**
-{
-  "questions": [
-    {
-      "id": "features",
-      "text": "Which features should I implement?",
-      "type": "multi-select",
-      "options": [{"label": "Dark mode"}, {"label": "Export to PDF"}, {"label": "Email notifications"}]
-    }
-  ]
-}
+**Example 3: Multiple options**
+Which features should I implement first?
+1. Dark mode - User interface theme
+2. Export to PDF - Document generation
+3. Email notifications - Alert system
+4. User authentication - Security feature
 
 ## Available Tools
 
