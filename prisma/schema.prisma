@@ -59,6 +59,8 @@ model TaskHistory {
   role         String
   content      String
   iteration    Int?
+  toolCallId   String?
+  toolCalls    String?  // JSON string of tool_calls array
   createdAt    DateTime @default(now())
 
   taskRecord   TaskRecord @relation(fields: [taskRecordId], references: [id], onDelete: Cascade)

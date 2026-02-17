@@ -173,9 +173,36 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
         let historyMessages: Message[] = []
         if (input.taskHistory) {
             state.history.push(...input.taskHistory)
-            historyMessages = input.taskHistory
-                .sort((a, b) => a.timestamp - b.timestamp)
-                .map((h) => ({ role: h.role, content: h.content }))
+            const sortedHistory = input.taskHistory.sort((a, b) => a.timestamp - b.timestamp)
+            
+            // Build messages with proper tool_calls assignment
+            // Tool messages have tool_calls stored, but they belong to the assistant message
+            // We need to move tool_calls from tool messages to their preceding assistant messages
+            const rawMessages: (Message & { tool_calls?: ToolCall[] })[] = sortedHistory.map((h) => ({
+                role: h.role,
+                content: h.content,
+                tool_call_id: h.tool_call_id,
+                tool_calls: h.tool_calls,
+            }))
+            
+            // Process messages: move tool_calls from tool role to preceding assistant role
+            for (let i = 0; i < rawMessages.length; i++) {
+                const msg = rawMessages[i]!
+                if (msg.role === 'tool' && msg.tool_calls) {
+                    // Find preceding assistant message and give it the tool_calls
+                    for (let j = i - 1; j >= 0; j--) {
+                        const prevMsg = rawMessages[j]!
+                        if (prevMsg.role === 'assistant') {
+                            prevMsg.tool_calls = msg.tool_calls
+                            break
+                        }
+                    }
+                    // Remove tool_calls from tool message (it should only have tool_call_id)
+                    msg.tool_calls = undefined
+                }
+            }
+            
+            historyMessages = rawMessages
         }
 
         const tools = await getAllTools()
@@ -207,7 +234,7 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
             let taskHistory: AgentHistoryEntry = {
                 iteration: state.currentIteration,
                 timestamp: Date.now(),
-                role: MessageRole.System,
+                role: MessageRole.Assistant,
                 content: '',
             }
 
@@ -240,6 +267,12 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                 const toolCall = response.toolCalls[0]!
                 const toolName = toolCall.function.name
                 const isMCP = toolName.includes('_')
+
+                taskHistory.tool_calls = response.toolCalls
+
+                // Save assistant entry with tool_calls before executing the tool
+                if (onProgress) await onProgress(taskHistory)
+
                 logger.debug('Agent', `Tool call: ${toolName} (${isMCP ? 'MCP' : 'system'})`)
                 const toolResult = await act(toolCall)
 
@@ -274,6 +307,7 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                     timestamp: Date.now(),
                     role: MessageRole.Tool,
                     content: JSON.stringify(toolCallContent),
+                    tool_call_id: toolCall.id,
                 }
                 state.history.push(toolHistoryEntry)
                 if (onProgress) await onProgress(toolHistoryEntry)
@@ -283,7 +317,6 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                 if (toolCall.function.name === 'ask_user') {
                     state.requiresHumanConfirmation = true
                     state.status = AgentStatus.AwaitingConfirmation
-                    if (onProgress) await onProgress(taskHistory)
                     break
                 }
             } catch (error) {

@@ -109,6 +109,8 @@ export async function getTaskRecord(
             content: entry.content,
             iteration: entry.iteration ?? undefined,
             timestamp: entry.createdAt.getTime(),
+            tool_call_id: entry.toolCallId ?? undefined,
+            tool_calls: entry.toolCalls ? JSON.parse(entry.toolCalls) : undefined,
         })
     }
 
@@ -188,6 +190,8 @@ export async function saveTaskHistory(
             role: entry.role,
             content: entry.content,
             iteration: entry.iteration ?? null,
+            toolCallId: entry.tool_call_id ?? null,
+            toolCalls: entry.tool_calls ? JSON.stringify(entry.tool_calls) : null,
             createdAt: new Date(entry.timestamp),
         },
     })
@@ -216,6 +220,8 @@ export async function getTaskHistory(
         content: entry.content,
         iteration: entry.iteration ?? undefined,
         timestamp: entry.createdAt.getTime(),
+        tool_call_id: entry.toolCallId ?? undefined,
+        tool_calls: entry.toolCalls ? JSON.parse(entry.toolCalls) : undefined,
     }))
 }
 
@@ -312,6 +318,7 @@ export async function getPendingConfirmations(
                 content: entry.content,
                 iteration: entry.iteration ?? undefined,
                 timestamp: entry.createdAt.getTime(),
+                tool_call_id: entry.toolCallId ?? 'no_tool_call',
             })
         }
 

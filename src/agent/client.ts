@@ -1,6 +1,7 @@
 import { config } from './config'
 import { Message, LLMResponse, AgentInput } from './types'
 import { OpenAITool, toolsToOpenAIFormat } from './tools'
+import { logger } from '../utils/logger'
 
 interface LLMClientConfig {
     apiKey?: string
@@ -24,14 +25,21 @@ function createLLMClient(overrides?: LLMClientConfig) {
 
         const body: Record<string, unknown> = {
             model: model,
-            messages: messages.map((m) => ({
-                role: m.role,
-                content: m.content,
-                name: m.name,
-                tool_calls: m.tool_calls,
-                tool_call_id: m.tool_call_id,
-                reasoning_content: m.reasoning_content,
-            })),
+            messages: messages.map((m) => {
+                const msg: Record<string, unknown> = {
+                    role: m.role,
+                    content: m.content,
+                    name: m.name,
+                    reasoning_content: m.reasoning_content,
+                }
+                // Tool role messages should only have tool_call_id, not tool_calls
+                if (m.role === 'tool') {
+                    msg.tool_call_id = m.tool_call_id
+                } else {
+                    msg.tool_calls = m.tool_calls
+                }
+                return msg
+            }),
             tools: tools,
             temperature: 0.1,
         }
@@ -44,13 +52,15 @@ function createLLMClient(overrides?: LLMClientConfig) {
         const timeoutId = setTimeout(() => controller.abort(), timeout)
 
         try {
+            const requestBody = JSON.stringify(body)
+            logger.debug('LLMClient', `Sending request to OpenAI API: ${requestBody.length} bytes`)
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${apiKey}`,
                 },
-                body: JSON.stringify(body),
+                body: requestBody,
                 signal: controller.signal,
             })
 
@@ -103,14 +113,21 @@ function createLLMClient(overrides?: LLMClientConfig) {
 
         const body = {
             model: model,
-            messages: messages.map((m) => ({
-                role: m.role,
-                content: m.content,
-                name: m.name,
-                tool_calls: m.tool_calls,
-                tool_call_id: m.tool_call_id,
-                reasoning_content: m.reasoning_content,
-            })),
+            messages: messages.map((m) => {
+                const msg: Record<string, unknown> = {
+                    role: m.role,
+                    content: m.content,
+                    name: m.name,
+                    reasoning_content: m.reasoning_content,
+                }
+                // Tool role messages should only have tool_call_id, not tool_calls
+                if (m.role === 'tool') {
+                    msg.tool_call_id = m.tool_call_id
+                } else {
+                    msg.tool_calls = m.tool_calls
+                }
+                return msg
+            }),
             tools: tools,
             stream: true,
             temperature: 0.1,

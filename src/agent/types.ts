@@ -82,6 +82,8 @@ export interface AgentHistoryEntry {
     content: string
     iteration?: number
     timestamp: number
+    tool_call_id?: string
+    tool_calls?: ToolCall[]
 }
 
 export type ThinkingMode = 'auto' | 'enabled' | 'disabled'
