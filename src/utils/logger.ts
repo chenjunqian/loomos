@@ -1,9 +1,17 @@
 import pino from 'pino'
-import { join } from 'path'
+import { join, dirname } from 'path'
+import { mkdirSync } from 'fs'
 
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info'
 const LOG_FILE_ENABLED = process.env.LOG_FILE_ENABLED === 'true'
 const LOG_FILE = process.env.LOG_FILE || './logs/app.log'
+
+const ensureLogDirectory = (): void => {
+    if (LOG_FILE_ENABLED) {
+        const logPath = join(process.cwd(), LOG_FILE)
+        mkdirSync(dirname(logPath), { recursive: true })
+    }
+}
 
 type LogLevel = 'debug' | 'info' | 'error'
 
@@ -14,6 +22,8 @@ const getLogLevel = (): string => {
 }
 
 const createTransport = () => {
+    ensureLogDirectory()
+
     const targets: pino.TransportTargetOptions[] = [
         {
             level: getLogLevel(),
