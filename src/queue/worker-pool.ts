@@ -10,6 +10,7 @@ import { AgentInput, AgentStatus } from '../agent/types'
 import { TaskQueue } from '@prisma/client'
 import { cleanupIsolatedMCPClient } from '../agent/mcp/index.js'
 import { logger } from '../utils/logger'
+import { markJobCompleted } from '../database/scheduler'
 
 const provider = process.env.DATABASE_PROVIDER || 'sqlite'
 const isSQLite = provider === 'sqlite'
@@ -57,6 +58,10 @@ const processTask = async (
 
         await completeTask(task.id, true)
         logger.debug('WorkerPool', `Completed task ${task.id} successfully`)
+        if (task.scheduledJobId) {
+            await markJobCompleted(task.scheduledJobId, true)
+            logger.debug('WorkerPool', `Marked scheduled job ${task.scheduledJobId} as completed`)
+        }
         callbacks.onTaskComplete(task, true)
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
@@ -66,6 +71,10 @@ const processTask = async (
         })
 
         await completeTask(task.id, false, errorMessage)
+        if (task.scheduledJobId) {
+            await markJobCompleted(task.scheduledJobId, false, errorMessage)
+            logger.debug('WorkerPool', `Marked scheduled job ${task.scheduledJobId} as failed`)
+        }
         callbacks.onTaskComplete(task, false, errorMessage)
         callbacks.onTaskError(task, error as Error)
         logger.error('WorkerPool', `Task ${task.id} failed: ${errorMessage}`)

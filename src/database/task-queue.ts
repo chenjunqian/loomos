@@ -16,6 +16,7 @@ export interface CreateTaskInput {
     taskRecordId: string
     priority?: number
     maxAttempts?: number
+    scheduledJobId?: string
 }
 
 export interface TaskWithStatus extends TaskQueue {
@@ -30,6 +31,7 @@ export async function createTaskForQueue(input: CreateTaskInput): Promise<TaskQu
             priority: input.priority ?? 0,
             maxAttempts: input.maxAttempts ?? 3,
             status: TASK_STATUS.PENDING,
+            scheduledJobId: input.scheduledJobId,
         },
     })
 }

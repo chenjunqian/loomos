@@ -33,6 +33,7 @@ async function processScheduledJob(job: ScheduledJob): Promise<void> {
             userId: job.userId,
             taskRecordId: taskRecord.id,
             priority: 0,
+            scheduledJobId: job.id,
         })
 
         logger.info('Scheduler', `Enqueued task ${taskRecord.id} for scheduled job ${job.id}`)
