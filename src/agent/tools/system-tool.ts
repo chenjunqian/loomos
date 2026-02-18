@@ -1,6 +1,7 @@
 import { Tool, ToolResult } from '../types'
 import { glob } from 'glob'
 import { searchTaskHistory } from '../../database/task-record'
+import { createScheduledJob } from '../../database/scheduled-job'
 
 export const systemTools: Tool[] = [
     {
@@ -107,6 +108,40 @@ export const systemTools: Tool[] = [
                 },
             },
             required: ['query'],
+        },
+    },
+    {
+        name: 'create_scheduled_job',
+        description: 'Create a scheduled job that runs an AI agent task. Supports recurring (cron) or one-time execution. Use this when user wants to schedule a task for later or on a recurring basis.',
+        parameters: {
+            type: 'object',
+            properties: {
+                name: {
+                    type: 'string',
+                    description: 'Human-readable name for the scheduled job',
+                },
+                task: {
+                    type: 'string',
+                    description: 'The task/prompt for the AI agent to execute',
+                },
+                runAt: {
+                    type: 'string',
+                    description: 'ISO 8601 datetime for one-time job (e.g., "2026-02-20T09:00:00Z"). Use this for one-time schedules.',
+                },
+                cronExpression: {
+                    type: 'string',
+                    description: 'Cron expression for recurring jobs (e.g., "0 9 * * *" for daily at 9am, "0 * * * *" for hourly, "0 0 * * 0" for weekly). Use this for recurring schedules.',
+                },
+                timezone: {
+                    type: 'string',
+                    description: 'Timezone for the schedule (default: UTC). Examples: "America/New_York", "Asia/Tokyo"',
+                },
+                maxRetries: {
+                    type: 'string',
+                    description: 'Maximum retry attempts if the task fails (default: 3)',
+                },
+            },
+            required: ['name', 'task'],
         },
     },
 ]
@@ -425,6 +460,70 @@ export const systemToolHandlers: Record<string, (args: Record<string, unknown>) 
                 success: false,
                 content: '',
                 error: error instanceof Error ? error.message : 'Unknown error during history search',
+            }
+        }
+    },
+    create_scheduled_job: async (args, userId?: string) => {
+        if (!userId) {
+            return {
+                success: false,
+                content: '',
+                error: 'userId is required to create a scheduled job',
+            }
+        }
+
+        const name = args.name as string
+        const task = args.task as string
+        const runAt = args.runAt ? new Date(args.runAt as string) : undefined
+        const cronExpression = args.cronExpression as string | undefined
+        const timezone = (args.timezone as string) || 'UTC'
+        const maxRetries = args.maxRetries ? parseInt(args.maxRetries as string, 10) : 3
+
+        if (!name || !task) {
+            return {
+                success: false,
+                content: '',
+                error: 'name and task are required',
+            }
+        }
+
+        if (!cronExpression && !runAt) {
+            return {
+                success: false,
+                content: '',
+                error: 'Either cronExpression or runAt must be provided',
+            }
+        }
+
+        if (cronExpression && runAt) {
+            return {
+                success: false,
+                content: '',
+                error: 'Cannot specify both cronExpression and runAt',
+            }
+        }
+
+        try {
+            const job = await createScheduledJob({
+                userId,
+                name,
+                task,
+                cronExpression,
+                runAt,
+                timezone,
+                maxRetries,
+            })
+
+            const scheduleType = cronExpression ? `cron: ${cronExpression}` : `one-time: ${runAt?.toISOString()}`
+            return {
+                success: true,
+                content: `Scheduled job created successfully!\n\nName: ${job.name}\nSchedule: ${scheduleType}\nTimezone: ${job.timezone}\nJob ID: ${job.id}\nNext run: ${job.nextRunAt.toISOString()}`,
+            }
+        } catch (error) {
+            return {
+                success: false,
+                content: '',
+                error: error instanceof Error ? error.message : 'Unknown error creating scheduled job',
             }
         }
     },

@@ -9,6 +9,7 @@
     "@dotenvx/dotenvx": "^1.51.4",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "@prisma/client": "5.22.0",
+    "cron-parser": "^4.9.0",
     "hono": "^4.11.5",
     "js-yaml": "^4.1.1",
     "pino": "^10.3.0",
