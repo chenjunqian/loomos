@@ -1,6 +1,6 @@
-import { getDueJobs, updateJobAfterExecution, type ScheduledJob } from './scheduled-job'
-import { saveTaskRecord } from './task-record'
-import { createTaskForQueue, getDatabaseProvider } from './task-queue'
+import { getDueJobs, updateJobAfterExecution, type ScheduledJob } from '../database/scheduled-job'
+import { saveTaskRecord } from '../database/task-record'
+import { createTaskForQueue, getDatabaseProvider } from '../database/task-queue'
 import { logger } from '../utils/logger'
 import { AgentStatus } from '../agent/types'
 

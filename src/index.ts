@@ -5,7 +5,7 @@ import { agentApp } from './agent/routes'
 import { skillsRoutes } from './agent/skills/routes'
 import { schedulerApp } from './scheduler/routes'
 import { workerPool } from './queue/worker-pool'
-import { startScheduler, stopScheduler } from './database/scheduler'
+import { startScheduler, stopScheduler } from './scheduler/scheduler'
 
 const app = new Hono()
 

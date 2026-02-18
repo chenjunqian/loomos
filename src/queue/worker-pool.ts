@@ -10,7 +10,7 @@ import { AgentInput, AgentStatus } from '../agent/types'
 import { TaskQueue } from '@prisma/client'
 import { cleanupIsolatedMCPClient } from '../agent/mcp/index.js'
 import { logger } from '../utils/logger'
-import { markJobCompleted } from '../database/scheduler'
+import { markJobCompleted } from '../scheduler/scheduler'
 
 const provider = process.env.DATABASE_PROVIDER || 'sqlite'
 const isSQLite = provider === 'sqlite'
