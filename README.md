@@ -1,21 +1,22 @@
 # Loomos
 
-Your AI assistant for daily life. A server-side agent API that helps with everyday tasks like reminders, scheduling, travel advice, research, and decision-making.
+A generic AI agent for daily life. Built on Bun + Hono, it leverages Playwright MCP for browser automation and Find-Skill for capability discovery to complete your tasks. Run it locally or deploy to a server.
 
 ## Features
 
 - 🧠 **Intelligent Reasoning** - Thinks step-by-step to solve complex tasks
-- 🌐 **Web Search & Fetch** - Gathers real-time information from the web
+- 🌐 **Browser Automation** - Uses Playwright MCP to interact with websites
+- 🔍 **Skill Discovery** - Finds and applies relevant skills via Find-Skill
 - ✅ **Human-in-the-Loop** - Confirms with you before taking important actions
 - ⚡ **Background Processing** - Handles tasks asynchronously with a worker queue
 - 💾 **Task Persistence** - Saves conversation history and task state
 
 ## Use Cases
 
-- **Reminders & Scheduling** - Set up reminders and manage your calendar
-- **Travel Advice** - Get destination info, weather, and planning tips
-- **Research** - Search and summarize information from multiple sources
-- **Daily Decisions** - Get recommendations with human oversight for important choices
+- **Web Automation** - Browse websites, fill forms, extract data
+- **Research** - Search, gather, and summarize information
+- **Content Creation** - Generate and publish content online
+- **Daily Tasks** - Any task you can do in a browser
 
 ## Quick Start
 
