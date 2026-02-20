@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
-import { loadSkills, getSkillByName, loadSkillFile, getSkillBundle } from './index'
-import { config } from '../config'
+import { loadSkills, getSkillByName, loadSkillFile, getSkillBundle } from '../agent/skills/index'
+import { config } from '../agent/config'
 
 export const skillsRoutes = new Hono()
 

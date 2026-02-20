@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
-import { queueApp } from './queue/routes'
-import { agentApp } from './agent/routes'
-import { skillsRoutes } from './agent/skills/routes'
-import { schedulerApp } from './scheduler/routes'
+import { queueApp } from './routes/queue'
+import { agentApp } from './routes/agent'
+import { skillsRoutes } from './routes/skills'
+import { schedulerApp } from './routes/scheduler'
 import { workerPool } from './queue/worker-pool'
 import { startScheduler, stopScheduler } from './scheduler/scheduler'
 

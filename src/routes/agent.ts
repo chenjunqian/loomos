@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import { availableTools } from './index.js'
+import { availableTools } from '../agent/index.js'
 import { getTaskRecord, saveTaskRecord, getTaskHistory } from '../database/task-record.js'
 import { createTaskForQueue, completeTask, prisma, TASK_STATUS } from '../database/task-queue.js'
-import { AgentInput, AgentStatus, MessageRole } from './types.js'
+import { AgentInput, AgentStatus, MessageRole } from '../agent/types.js'
 
 export const agentApp = new Hono()
 
