@@ -156,6 +156,11 @@ return {
 ```
 src/
 ├── index.ts              # Hono app, route config, middleware, worker pool startup
+├── routes/
+│   ├── agent.ts         # Agent API endpoints (/run, /confirm, /state, /tools, /history)
+│   ├── queue.ts         # Queue API endpoints (/tasks/:id, /stats)
+│   ├── scheduler.ts     # Scheduler API endpoints
+│   └── skills.ts        # Skill API endpoints (/skills, /skills/:name, /skills/:name/bundle, /skills/:name/file/*)
 ├── utils/
 │   └── logger.ts         # Pino-based structured logging with file rotation
 ├── agent/
@@ -164,7 +169,6 @@ src/
 │   ├── config.ts         # Environment config (getAgentConfig, config)
 │   ├── prompt.ts         # System prompt templates (with/without thinking)
 │   ├── types.ts          # TypeScript interfaces/enums (AgentStatus, MessageRole, etc.)
-│   ├── routes.ts         # Agent API endpoints (/run, /confirm, /state, /tools, /history)
 │   ├── mcp/
 │   │   ├── index.ts      # MCP module exports (client, adapter, config)
 │   │   ├── client.ts     # MCP client factory (shared & user-isolated), HTTP/SSE transport
@@ -172,7 +176,6 @@ src/
 │   │   └── config.ts      # MCP server configurations (filesystem, playwright)
 │   ├── skills/
 │   │   ├── index.ts      # Skill loader with YAML frontmatter parsing
-│   │   └── routes.ts      # Skill API endpoints (/skills, /skills/:name, /skills/:name/bundle)
 │   └── tools/
 │       ├── index.ts      # Tool registry, MCP tool integration, handler dispatch
 │       └── system-tool.ts # Built-in system tools (read_file, search_file_content, etc.)
@@ -184,8 +187,9 @@ src/
 │   ├── task-record.ts    # TaskRecord persistence, history management
 │   └── mcp-session.ts    # User session persistence for Playwright storage state
 └── queue/
-    ├── routes.ts         # Queue API endpoints (/tasks/:id, /stats)
     └── worker-pool.ts    # Background task workers, concurrency control, stale task recovery
+└── scheduler/
+    └── scheduler.ts      # Task scheduler for periodic/cron jobs
 ```
 
 ### Key Patterns
@@ -257,6 +261,12 @@ GET  /skills/:name/bundle # Get skill bundle (scripts, references, examples)
 GET  /skills/:name/file/* # Get skill resource file
 GET  /queue/tasks/:id     # Get task queue status
 GET  /queue/stats         # Get queue statistics (pending/processing/completed/failed)
+GET  /scheduler/jobs      # List scheduled jobs
+POST /scheduler/jobs      # Create a scheduled job (requires cronExpression or runAt)
+GET  /scheduler/jobs/:id  # Get a scheduled job
+PUT  /scheduler/jobs/:id  # Update a scheduled job
+DELETE /scheduler/jobs/:id # Delete a scheduled job
+POST /scheduler/jobs/:id/run # Manually trigger a scheduled job
 ```
 
 ## Configuration
