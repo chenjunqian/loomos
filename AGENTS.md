@@ -169,6 +169,7 @@ src/
 │   ├── config.ts         # Environment config (getAgentConfig, config)
 │   ├── prompt.ts         # System prompt templates (with/without thinking)
 │   ├── types.ts          # TypeScript interfaces/enums (AgentStatus, MessageRole, etc.)
+│   ├── gateway.ts        # Task operations (createTask, getTask, confirmTask, getTasksByUser, getTaskHistory, stopTask)
 │   ├── mcp/
 │   │   ├── index.ts      # MCP module exports (client, adapter, config)
 │   │   ├── client.ts     # MCP client factory (shared & user-isolated), HTTP/SSE transport
@@ -195,6 +196,7 @@ src/
 ### Key Patterns
 
 - **Agent**: Closure-based factory with `{ run, getState, confirmAction }`, supports `thinkingMode` and progress callbacks, `activeSkills` for skill activation
+- **Gateway**: Task operations module with functions for creating, retrieving, confirming, and stopping tasks; manages TaskRecord and TaskQueue coordination
 - **LLM Client**: Functional factory with optional config overrides, supports streaming via `streamChat`
 - **MCP Client**: Dual-mode (shared & user-isolated) with session state persistence, HTTP/SSE transport support
 - **Tools**: Unified system (system tools + MCP tools), auto-converted to OpenAI format
