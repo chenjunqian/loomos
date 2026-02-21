@@ -5,9 +5,9 @@
             "type": "bun",
             "request": "launch",
             "name": "dev",
-            "program": "${workspaceFolder}/src/index.ts",
-            "cwd": "${workspaceFolder}",
-            // "runtimeArgs": ["--inspect-brk"]
+            // "runtimeExecutable": "bun",
+            "runtimeArgs": ["run", "--hot", "src/index.ts"],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
