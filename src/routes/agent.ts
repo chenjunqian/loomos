@@ -1,8 +1,7 @@
 import { Hono } from 'hono'
 import { availableTools } from '../agent/index.js'
-import { getTaskRecord, saveTaskRecord, getTaskHistory } from '../database/task-record.js'
-import { createTaskForQueue, completeTask, prisma, TASK_STATUS } from '../database/task-queue.js'
-import { AgentInput, AgentStatus, MessageRole } from '../agent/types.js'
+import { createTask, getTask, getTaskHistory, confirmTask } from '../agent/gateway.js'
+import { AgentInput, MessageRole } from '../agent/types.js'
 
 export const agentApp = new Hono()
 
@@ -13,29 +12,18 @@ agentApp.post('/run', async (c) => {
             return c.json({ error: 'task is required' }, 400)
         }
 
-        const taskId = body.taskId || crypto.randomUUID()
         const userId = body.userId || 'default'
-
-        await saveTaskRecord({
-            id: taskId,
-            userId,
-            taskContent: body.task,
-            role: MessageRole.User,
-            status: AgentStatus.Idle,
+        const result = await createTask(userId, body.task, {
+            taskId: body.taskId,
+            thinkingMode: body.thinkingMode,
+            maxIterations: body.maxIterations,
+            apiKey: body.apiKey,
+            baseUrl: body.baseUrl,
+            model: body.model,
+            activeSkills: body.activeSkills,
         })
 
-        await createTaskForQueue({
-            userId,
-            taskRecordId: taskId,
-            priority: 0,
-        })
-
-        return c.json({
-            taskId,
-            userId,
-            status: 'queued',
-            message: 'Task has been queued for processing',
-        })
+        return c.json(result)
     } catch (error) {
         console.error(`[Agent] Error in /run:`, error)
         return c.json(
@@ -48,60 +36,26 @@ agentApp.post('/run', async (c) => {
 agentApp.post('/confirm', async (c) => {
     try {
         const body = await c.req.json<AgentInput>()
-        const { approved } = body
+        const approved = body.approved
 
         if (!body.userId || !body.taskId) {
             return c.json({ error: 'userId and taskId are required' }, 400)
         }
 
-        const taskId = body.taskId
-        const userId = body.userId
-
-        const existingRecord = await getTaskRecord(userId, taskId)
-
-        if (!existingRecord) {
-            return c.json({ error: 'Task record not found' }, 404)
+        if (approved === undefined) {
+            return c.json({ error: 'approved is required' }, 400)
         }
 
-        const task = body.task
-
-        if (approved === false) {
-            const previousQueue = await prisma.taskQueue.findFirst({
-                where: {
-                    userId,
-                    taskRecordId: taskId,
-                    status: TASK_STATUS.PROCESSING,
-                },
-                orderBy: { createdAt: 'desc' },
-            })
-
-            if (previousQueue) {
-                await completeTask(previousQueue.id, false, 'Rejected by user')
-            }
-        }
-
-        await saveTaskRecord({
-            id: taskId,
-            userId,
-            taskContent: task,
-            role: MessageRole.User,
-            status: AgentStatus.Idle,
-        })
-
-        await createTaskForQueue({
-            userId,
-            taskRecordId: taskId,
-            priority: 1,
-        })
+        const result = await confirmTask(body.userId, body.taskId, approved, body.alternativeInput)
 
         return c.json({
-            taskId,
-            userId,
-            status: TASK_STATUS.PENDING,
+            ...result,
             approved,
-            message: 'Confirmation has been queued for processing',
         })
     } catch (error) {
+        if (error instanceof Error && error.message === 'Task record not found') {
+            return c.json({ error: 'Task record not found' }, 404)
+        }
         console.error(`[Agent] Error in /confirm:`, error)
         return c.json(
             { error: error instanceof Error ? error.message : 'Unknown error' },
@@ -118,7 +72,7 @@ agentApp.get('/state', async (c) => {
         return c.json({ error: 'userId and taskId are required as query parameters' }, 400)
     }
 
-    const record = await getTaskRecord(userId, taskId)
+    const record = await getTask(taskId, userId)
 
     if (record) {
         return c.json({
@@ -145,7 +99,7 @@ agentApp.get('/history', async (c) => {
         return c.json({ error: 'userId and taskId are required as query parameters' }, 400)
     }
 
-    const history = await getTaskHistory(userId, taskId, role as MessageRole | undefined)
+    const history = await getTaskHistory(taskId, userId, role as MessageRole | undefined)
 
     return c.json({
         userId,
