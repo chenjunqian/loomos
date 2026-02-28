@@ -6,7 +6,7 @@ import {
 } from '../database/task-queue'
 import { getTaskRecord, updateTaskRecord, saveTaskHistory } from '../database/task-record'
 import { createAgent } from '../agent'
-import { AgentInput, AgentStatus } from '../agent/types'
+import { AgentInput, AgentStatus, AgentHistoryEntry } from '../agent/types'
 import { TaskQueue } from '@prisma/client'
 import { cleanupIsolatedMCPClient } from '../agent/mcp/index.js'
 import { logger } from '../utils/logger'
@@ -25,6 +25,7 @@ const processTask = async (
     callbacks: {
         onTaskComplete: (task: TaskQueue, success: boolean, error?: string) => void
         onTaskError: (task: TaskQueue, error: Error) => void
+        onProgress?: (task: TaskQueue, entry: AgentHistoryEntry) => void
     }
 ): Promise<void> => {
     logger.debug('WorkerPool', `Starting to process task ${task.id}`)
@@ -46,6 +47,9 @@ const processTask = async (
 
         const onProgress = async (entry: Parameters<typeof saveTaskHistory>[1]): Promise<void> => {
             await saveTaskHistory(task.taskRecordId, entry)
+            if (callbacks.onProgress) {
+                callbacks.onProgress(task, entry)
+            }
         }
 
         const agent = createAgent(input, onProgress)
@@ -99,6 +103,7 @@ const runWorker = (
         onTaskStart: (task: TaskQueue) => void
         onTaskComplete: (task: TaskQueue, success: boolean, error?: string) => void
         onTaskError: (task: TaskQueue, error: Error) => void
+        triggerProgress: (task: TaskQueue, entry: AgentHistoryEntry) => void
     }
 ): (() => Promise<void>) => {
     let backoffMs = 1000
@@ -121,6 +126,7 @@ const runWorker = (
                 await processTask(task, {
                     onTaskComplete: options.onTaskComplete,
                     onTaskError: options.onTaskError,
+                    onProgress: options.triggerProgress,
                 })
 
                 state.workers.set(workerName, false)
@@ -138,11 +144,15 @@ const runWorker = (
     return workerLoop
 }
 
+export type ProgressCallback = (task: TaskQueue, entry: AgentHistoryEntry) => void
+
 export interface WorkerPool {
     start: () => Promise<void>
     stop: () => Promise<void>
     isRunning: () => boolean
     getActiveWorkers: () => number
+    registerProgressCallback: (callback: ProgressCallback) => () => void
+    unregisterProgressCallback: (callback: ProgressCallback) => void
 }
 
 export interface WorkerPoolOptions {
@@ -152,10 +162,12 @@ export interface WorkerPoolOptions {
     onTaskStart?: (task: TaskQueue) => void
     onTaskComplete?: (task: TaskQueue, success: boolean, error?: string) => void
     onTaskError?: (task: TaskQueue, error: Error) => void
+    onProgress?: (task: TaskQueue, entry: AgentHistoryEntry) => void
 }
 
 export const createWorkerPool = (options: WorkerPoolOptions = {}): WorkerPool => {
     const workerId = randomUUID()
+    const progressCallbacks = new Set<ProgressCallback>()
     const state = {
         running: false,
         workers: new Map<string, boolean>(),
@@ -170,6 +182,20 @@ export const createWorkerPool = (options: WorkerPoolOptions = {}): WorkerPool =>
         onTaskStart: options.onTaskStart ?? (() => { }),
         onTaskComplete: options.onTaskComplete ?? (() => { }),
         onTaskError: options.onTaskError ?? (() => { }),
+        onProgress: options.onProgress,
+    }
+
+    const triggerProgress = (task: TaskQueue, entry: AgentHistoryEntry): void => {
+        if (effectiveOptions.onProgress) {
+            effectiveOptions.onProgress(task, entry)
+        }
+        for (const callback of progressCallbacks) {
+            try {
+                callback(task, entry)
+            } catch (error) {
+                logger.error('WorkerPool', `Progress callback error: ${error}`)
+            }
+        }
     }
 
     const start = async (): Promise<void> => {
@@ -183,7 +209,10 @@ export const createWorkerPool = (options: WorkerPoolOptions = {}): WorkerPool =>
         for (let i = 0; i < effectiveOptions.concurrency; i++) {
             const workerName = `worker-${i}`
             state.workers.set(workerName, false)
-            const workerLoop = runWorker(workerName, workerId, state, effectiveOptions)
+            const workerLoop = runWorker(workerName, workerId, state, {
+                ...effectiveOptions,
+                triggerProgress,
+            })
             state.workerLoops.push(workerLoop)
             workerLoop()
         }
@@ -231,11 +260,22 @@ export const createWorkerPool = (options: WorkerPoolOptions = {}): WorkerPool =>
         return active
     }
 
+    const registerProgressCallback = (callback: ProgressCallback): (() => void) => {
+        progressCallbacks.add(callback)
+        return () => progressCallbacks.delete(callback)
+    }
+
+    const unregisterProgressCallback = (callback: ProgressCallback): void => {
+        progressCallbacks.delete(callback)
+    }
+
     return {
         start,
         stop,
         isRunning,
         getActiveWorkers,
+        registerProgressCallback,
+        unregisterProgressCallback,
     }
 }
 

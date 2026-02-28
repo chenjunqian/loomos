@@ -6,6 +6,7 @@ import { skillsRoutes } from './routes/skills'
 import { schedulerApp } from './routes/scheduler'
 import { workerPool } from './queue/worker-pool'
 import { startScheduler, stopScheduler } from './scheduler/scheduler'
+import { startTelegramBot, stopTelegramBot } from './telegram'
 
 const app = new Hono()
 
@@ -24,12 +25,15 @@ workerPool.start().catch((error) => {
     console.error('[Server] Failed to start worker pool:', error)
 })
 
+startTelegramBot(workerPool)
+
 startScheduler().catch((error) => {
     console.error('[Server] Failed to start scheduler:', error)
 })
 
 const gracefulShutdown = async () => {
     console.log('[Server] Shutting down...')
+    await stopTelegramBot()
     await stopScheduler()
     await workerPool.stop()
     process.exit(0)
