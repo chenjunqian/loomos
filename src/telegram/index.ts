@@ -46,7 +46,18 @@ export function startTelegramBot(workerPool: WorkerPool): Bot | null {
     workerPool.registerCompleteCallback(handleComplete)
     
     bot.start({
-        onStart: () => {
+        onStart: async () => {
+            try {
+                await bot?.api.setMyCommands([
+                    { command: 'start', description: 'Show welcome message' },
+                    { command: 'status', description: 'Check current task status' },
+                    { command: 'cancel', description: 'Cancel current task' },
+                    { command: 'new', description: 'Start a new conversation' }
+                ])
+                logger.info('TelegramBot', 'Telegram bot commands registered')
+            } catch (error) {
+                logger.error('TelegramBot', `Failed to register commands: ${error}`)
+            }
             logger.info('TelegramBot', 'Telegram bot started successfully')
         },
     })
