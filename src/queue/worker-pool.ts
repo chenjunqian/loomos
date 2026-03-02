@@ -145,6 +145,7 @@ const runWorker = (
 }
 
 export type ProgressCallback = (task: TaskQueue, entry: AgentHistoryEntry) => void
+export type CompleteCallback = (task: TaskQueue, success: boolean, error?: string) => void
 
 export interface WorkerPool {
     start: () => Promise<void>
@@ -153,6 +154,8 @@ export interface WorkerPool {
     getActiveWorkers: () => number
     registerProgressCallback: (callback: ProgressCallback) => () => void
     unregisterProgressCallback: (callback: ProgressCallback) => void
+    registerCompleteCallback: (callback: CompleteCallback) => () => void
+    unregisterCompleteCallback: (callback: CompleteCallback) => void
 }
 
 export interface WorkerPoolOptions {
@@ -168,6 +171,7 @@ export interface WorkerPoolOptions {
 export const createWorkerPool = (options: WorkerPoolOptions = {}): WorkerPool => {
     const workerId = randomUUID()
     const progressCallbacks = new Set<ProgressCallback>()
+    const completeCallbacks = new Set<CompleteCallback>()
     const state = {
         running: false,
         workers: new Map<string, boolean>(),
@@ -198,6 +202,19 @@ export const createWorkerPool = (options: WorkerPoolOptions = {}): WorkerPool =>
         }
     }
 
+    const triggerComplete = (task: TaskQueue, success: boolean, error?: string): void => {
+        if (effectiveOptions.onTaskComplete) {
+            effectiveOptions.onTaskComplete(task, success, error)
+        }
+        for (const callback of completeCallbacks) {
+            try {
+                callback(task, success, error)
+            } catch (err) {
+                logger.error('WorkerPool', `Complete callback error: ${err}`)
+            }
+        }
+    }
+
     const start = async (): Promise<void> => {
         if (state.running) return
 
@@ -211,6 +228,7 @@ export const createWorkerPool = (options: WorkerPoolOptions = {}): WorkerPool =>
             state.workers.set(workerName, false)
             const workerLoop = runWorker(workerName, workerId, state, {
                 ...effectiveOptions,
+                onTaskComplete: triggerComplete,
                 triggerProgress,
             })
             state.workerLoops.push(workerLoop)
@@ -269,6 +287,15 @@ export const createWorkerPool = (options: WorkerPoolOptions = {}): WorkerPool =>
         progressCallbacks.delete(callback)
     }
 
+    const registerCompleteCallback = (callback: CompleteCallback): (() => void) => {
+        completeCallbacks.add(callback)
+        return () => completeCallbacks.delete(callback)
+    }
+
+    const unregisterCompleteCallback = (callback: CompleteCallback): void => {
+        completeCallbacks.delete(callback)
+    }
+
     return {
         start,
         stop,
@@ -276,6 +303,8 @@ export const createWorkerPool = (options: WorkerPoolOptions = {}): WorkerPool =>
         getActiveWorkers,
         registerProgressCallback,
         unregisterProgressCallback,
+        registerCompleteCallback,
+        unregisterCompleteCallback,
     }
 }
 

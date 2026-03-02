@@ -3,14 +3,14 @@ import { createTelegramBot, sendAssistantResponse, sendConfirmationRequest } fro
 import { TelegramBotConfig } from './types'
 import { getTask } from '../agent/gateway'
 import { 
-    getSession, 
     clearActiveTask,
 } from './session'
 import { AgentStatus, MessageRole, AgentHistoryEntry } from '../agent/types'
 import { TaskQueue } from '@prisma/client'
 import { logger } from '../utils/logger'
-import { WorkerPool, ProgressCallback } from '../queue/worker-pool'
+import { WorkerPool, ProgressCallback, CompleteCallback } from '../queue/worker-pool'
 import { prisma } from '../database/task-queue'
+import { getTaskRecord } from '../database/task-record'
 
 let bot: Bot | null = null
 
@@ -38,7 +38,12 @@ export function startTelegramBot(workerPool: WorkerPool): Bot | null {
         handleProgressUpdate(task, entry)
     }
     
+    const handleComplete: CompleteCallback = (task: TaskQueue, success: boolean, error?: string) => {
+        handleTaskComplete(task, success, error)
+    }
+    
     workerPool.registerProgressCallback(handleProgress)
+    workerPool.registerCompleteCallback(handleComplete)
     
     bot.start({
         onStart: () => {
@@ -67,17 +72,46 @@ async function handleProgressUpdate(
     const chatId = parseInt(account.providerId)
     if (isNaN(chatId)) return
     
-    const session = await getSession(chatId)
-    if (!session || session.taskId !== task.taskRecordId) return
+    // Instead of getSession which might skip completed tasks, get the specific task record
+    const taskRecord = await getTaskRecord(task.userId, task.taskRecordId)
+    if (!taskRecord) return
     
-    if (entry.role === MessageRole.Assistant && entry.content) {
-        await sendAssistantResponse(bot, chatId, entry.content, session.lastMessageId || undefined)
+    let lastMessageId: number | undefined = undefined
+    if (taskRecord.metadata) {
+        try {
+            const meta = JSON.parse(taskRecord.metadata)
+            if (meta.telegramLastMessageId) {
+                lastMessageId = parseInt(meta.telegramLastMessageId)
+            }
+        } catch (e) {}
     }
     
-    // Check if task is completed after this progress update
+    if (entry.role === MessageRole.Assistant && entry.content) {
+        await sendAssistantResponse(bot, chatId, entry.content, lastMessageId)
+    }
+}
+
+async function handleTaskComplete(
+    task: TaskQueue, 
+    _success: boolean, 
+    error?: string
+): Promise<void> {
+    if (!bot) return
+    
+    const account = await prisma.userAccount.findFirst({
+        where: {
+            userId: task.userId,
+            provider: 'telegram'
+        }
+    })
+
+    if (!account) return
+    const chatId = parseInt(account.providerId)
+    if (isNaN(chatId)) return
+
     const taskInfo = await getTask(task.taskRecordId, task.userId)
     if (!taskInfo) return
-    
+
     if (taskInfo.status === AgentStatus.AwaitingConfirmation) {
         const lastAssistantEntry = taskInfo.history
             .filter(h => h.role === MessageRole.Assistant)
@@ -95,14 +129,14 @@ async function handleProgressUpdate(
             .filter(h => h.role === MessageRole.Assistant)
             .pop()
         
-        if (lastAssistantEntry?.content) {
-            await sendAssistantResponse(bot, chatId, lastAssistantEntry.content)
-        } else {
+        // Only send completion if we haven't already sent this text via progress
+        if (!lastAssistantEntry?.content) {
             await bot.api.sendMessage(chatId, 'Task completed successfully.')
         }
         await clearActiveTask(chatId)
     } else if (taskInfo.status === AgentStatus.Error) {
-        await bot.api.sendMessage(chatId, 'Task failed.')
+        const errorMsg = error || 'Task failed.'
+        await bot.api.sendMessage(chatId, errorMsg)
         await clearActiveTask(chatId)
     }
 }
