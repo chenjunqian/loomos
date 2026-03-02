@@ -1,9 +1,7 @@
 import { AgentStatus } from '../agent/types'
 import { TelegramSession, TelegramChatState } from './types'
 import { getOrCreateUserByAccount } from '../database/user'
-import { getTaskRecord, updateTaskRecord } from '../database/task-record'
-import { prisma } from '../database/task-queue'
-import { stopTask } from '../agent/gateway'
+import { stopTask, getTask, getTasksByUser, updateTask } from '../agent/gateway'
 
 const PROVIDER = 'telegram'
 
@@ -11,16 +9,11 @@ export async function getSession(chatId: number): Promise<TelegramSession | unde
     try {
         const { user, account } = await getOrCreateUserByAccount(PROVIDER, chatId.toString())
         
-        // Find the latest incomplete task for this user
-        const activeTask = await prisma.taskRecord.findFirst({
-            where: {
-                userId: user.id,
-                status: {
-                    notIn: [AgentStatus.Completed, AgentStatus.Error]
-                }
-            },
-            orderBy: { createdAt: 'desc' }
-        })
+        // Find the latest task for this user
+        // We include Completed tasks to preserve history for context
+        // Only exclude Error tasks which are usually aborted or explicitly cleared
+        const tasks = await getTasksByUser(user.id, { limit: 1 })
+        const activeTask = tasks.length > 0 && tasks[0] && tasks[0].status !== AgentStatus.Error ? tasks[0] : null
 
         let lastMessageId: number | null = null
         if (activeTask?.metadata) {
@@ -38,7 +31,7 @@ export async function getSession(chatId: number): Promise<TelegramSession | unde
             chatId,
             userId: user.id,
             accountId: account.id,
-            taskId: activeTask?.id || null,
+            taskId: activeTask?.taskId || null,
             status: (activeTask?.status as TelegramChatState) || 'idle',
             lastMessageId,
             createdAt: activeTask?.createdAt || new Date(),
@@ -52,15 +45,10 @@ export async function getSession(chatId: number): Promise<TelegramSession | unde
 export async function getOrCreateSession(chatId: number, username?: string): Promise<TelegramSession> {
     const { user, account } = await getOrCreateUserByAccount(PROVIDER, chatId.toString(), { username })
     
-    const activeTask = await prisma.taskRecord.findFirst({
-        where: {
-            userId: user.id,
-            status: {
-                notIn: [AgentStatus.Completed, AgentStatus.Error]
-            }
-        },
-        orderBy: { createdAt: 'desc' }
-    })
+    // Find the latest task for this user
+    // We include Completed tasks to preserve history for context
+    const tasks = await getTasksByUser(user.id, { limit: 1 })
+    const activeTask = tasks.length > 0 && tasks[0] && tasks[0].status !== AgentStatus.Error ? tasks[0] : null
 
     let lastMessageId: number | null = null
     if (activeTask?.metadata) {
@@ -78,7 +66,7 @@ export async function getOrCreateSession(chatId: number, username?: string): Pro
         chatId,
         userId: user.id,
         accountId: account.id,
-        taskId: activeTask?.id || null,
+        taskId: activeTask?.taskId || null,
         status: (activeTask?.status as TelegramChatState) || 'idle',
         lastMessageId,
         createdAt: activeTask?.createdAt || new Date(),
@@ -90,7 +78,7 @@ export async function setLastMessageId(chatId: number, messageId: number): Promi
     const session = await getSession(chatId)
     if (!session || !session.taskId) return
 
-    const task = await getTaskRecord(session.userId, session.taskId)
+    const task = await getTask(session.taskId, session.userId)
     if (!task) return
 
     let metadata: Record<string, any> = {}
@@ -102,7 +90,7 @@ export async function setLastMessageId(chatId: number, messageId: number): Promi
 
     metadata.telegramLastMessageId = messageId
 
-    await updateTaskRecord(session.taskId, {
+    await updateTask(session.taskId, {
         metadata: JSON.stringify(metadata)
     })
 }

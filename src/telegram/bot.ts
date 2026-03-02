@@ -1,7 +1,5 @@
 import { Bot, Context, InlineKeyboard } from 'grammy'
 import { createTask, getTask } from '../agent/gateway'
-import { saveTaskHistory, getTaskRecord, updateTaskRecord } from '../database/task-record'
-import { createTaskForQueue } from '../database/task-queue'
 import {
     getOrCreateSession,
     setLastMessageId,
@@ -17,7 +15,6 @@ import {
     createCallbackData,
 } from './callbacks'
 import { TelegramBotConfig, TelegramSession } from './types'
-import { AgentStatus, MessageRole } from '../agent/types'
 import { logger } from '../utils/logger'
 
 const MAX_MESSAGE_LENGTH = 4096
@@ -185,26 +182,15 @@ async function handleContinueConversation(
     try {
         await ctx.replyWithChatAction('typing')
 
-        const existingRecord = await getTaskRecord(session.userId, session.taskId)
-        if (!existingRecord) {
+        const taskInfo = await getTask(session.taskId, session.userId)
+        if (!taskInfo) {
             await clearActiveTask(chatId)
             await handleNewTask(ctx, chatId, text, session)
             return
         }
 
-        await saveTaskHistory(session.taskId, {
-            role: MessageRole.User,
-            content: text,
-            timestamp: Date.now(),
-        })
-
-        await updateTaskRecord(session.taskId, {
-            status: AgentStatus.Idle,
-        })
-
-        await createTaskForQueue({
-            userId: session.userId,
-            taskRecordId: session.taskId,
+        await createTask(session.userId, text, {
+            taskId: session.taskId,
             priority: 1,
         })
 

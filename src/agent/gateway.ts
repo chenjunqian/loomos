@@ -33,6 +33,7 @@ export interface TaskInfo {
     status: AgentStatus
     requiresConfirmation: boolean
     history: AgentHistoryEntry[]
+    metadata?: string
     createdAt: Date
     updatedAt: Date
 }
@@ -89,6 +90,7 @@ export async function getTask(
         status: record.status,
         requiresConfirmation: record.requiresConfirmation,
         history: record.history,
+        metadata: record.metadata,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
     }
@@ -130,9 +132,21 @@ export async function getTasksByUser(
             tool_call_id: entry.toolCallId ?? undefined,
             tool_calls: entry.toolCalls ? JSON.parse(entry.toolCalls) : undefined,
         })),
+        metadata: record.metadata ?? undefined,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
     }))
+}
+
+export async function updateTask(
+    taskId: string,
+    updates: {
+        status?: AgentStatus
+        requiresConfirmation?: boolean
+        metadata?: string
+    }
+): Promise<void> {
+    await updateTaskRecord(taskId, updates)
 }
 
 export async function getTaskHistory(
