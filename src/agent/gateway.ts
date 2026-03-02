@@ -3,6 +3,7 @@ import {
     saveTaskRecord,
     getTaskHistory as getTaskHistoryFromDb,
     updateTaskRecord,
+    applyContextWindow,
 } from '../database/task-record'
 import { createTaskForQueue, completeTask, prisma, TASK_STATUS } from '../database/task-queue'
 import { AgentStatus, MessageRole, AgentHistoryEntry } from './types'
@@ -25,6 +26,7 @@ export interface TaskFilters {
     toDate?: Date
     limit?: number
     offset?: number
+    historyLimit?: number
 }
 
 export interface TaskInfo {
@@ -76,9 +78,10 @@ export async function createTask(
 
 export async function getTask(
     taskId: string,
-    userId: string
+    userId: string,
+    historyLimit: number = 10
 ): Promise<TaskInfo | null> {
-    const record = await getTaskRecord(userId, taskId)
+    const record = await getTaskRecord(userId, taskId, historyLimit)
 
     if (!record) {
         return null
@@ -119,23 +122,31 @@ export async function getTasksByUser(
         skip: filters?.offset ?? 0,
     })
 
-    return taskRecords.map((record) => ({
-        taskId: record.id,
-        userId: record.userId,
-        status: record.status as AgentStatus,
-        requiresConfirmation: record.requiresConfirmation,
-        history: record.history.map((entry) => ({
+    const historyLimit = filters?.historyLimit ?? 10
+
+    return taskRecords.map((record) => {
+        let history: AgentHistoryEntry[] = record.history.map((entry) => ({
             role: entry.role as AgentHistoryEntry['role'],
             content: entry.content,
             iteration: entry.iteration ?? undefined,
             timestamp: entry.createdAt.getTime(),
             tool_call_id: entry.toolCallId ?? undefined,
             tool_calls: entry.toolCalls ? JSON.parse(entry.toolCalls) : undefined,
-        })),
-        metadata: record.metadata ?? undefined,
-        createdAt: record.createdAt,
-        updatedAt: record.updatedAt,
-    }))
+        }))
+
+        history = applyContextWindow(history, historyLimit)
+
+        return {
+            taskId: record.id,
+            userId: record.userId,
+            status: record.status as AgentStatus,
+            requiresConfirmation: record.requiresConfirmation,
+            history,
+            metadata: record.metadata ?? undefined,
+            createdAt: record.createdAt,
+            updatedAt: record.updatedAt,
+        }
+    })
 }
 
 export async function updateTask(
@@ -152,9 +163,10 @@ export async function updateTask(
 export async function getTaskHistory(
     taskId: string,
     userId: string,
-    role?: MessageRole
+    role?: MessageRole,
+    limit: number = 10
 ): Promise<AgentHistoryEntry[]> {
-    return getTaskHistoryFromDb(userId, taskId, role)
+    return getTaskHistoryFromDb(userId, taskId, role, limit)
 }
 
 export async function confirmTask(

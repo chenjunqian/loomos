@@ -212,7 +212,7 @@ export async function sendAssistantResponse(
     lastMessageId?: number
 ): Promise<void> {
     const truncatedContent = truncateMessage(content)
-    
+
     try {
         if (lastMessageId) {
             await bot.api.editMessageText(chatId, lastMessageId, truncatedContent)
@@ -236,10 +236,10 @@ export async function sendConfirmationRequest(
         .text('Reject', createCallbackData(CALLBACK_REJECT, taskId))
 
     const truncatedMessage = truncateMessage(confirmationMessage)
-    
+
     await bot.api.sendMessage(chatId, truncatedMessage, {
         reply_markup: keyboard,
     })
 
     logger.info('TelegramBot', `Sent confirmation request for task ${taskId} to chat ${chatId}`)
-    }
+}

@@ -88,9 +88,29 @@ export interface UpdateTaskRecordInput {
     metadata?: string
 }
 
+export function applyContextWindow(history: AgentHistoryEntry[], limit: number): AgentHistoryEntry[] {
+    if (limit <= 0 || history.length <= limit) return history
+
+    const firstMessage = history[0]!
+    let recentMessages = history.slice(-(limit - 1))
+
+    // Ensure tool call integrity: drop leading 'tool' messages without their 'assistant' calls
+    while (recentMessages.length > 0 && recentMessages[0]!.role === MessageRole.Tool) {
+        recentMessages.shift()
+    }
+
+    // Avoid duplicating the first message if history is very small
+    if (recentMessages.length > 0 && recentMessages[0]!.timestamp === firstMessage.timestamp) {
+        recentMessages.shift()
+    }
+
+    return [firstMessage, ...recentMessages]
+}
+
 export async function getTaskRecord(
     userId: string,
-    taskId: string
+    taskId: string,
+    historyLimit: number = 10
 ): Promise<TaskRecord | null> {
     const record = await prisma.taskRecord.findUnique({
         where: { id: taskId, userId },
@@ -103,7 +123,7 @@ export async function getTaskRecord(
 
     if (!record) return null
 
-    const history: AgentHistoryEntry[] = []
+    let history: AgentHistoryEntry[] = []
     for (const entry of record.history) {
         history.push({
             role: entry.role as AgentHistoryEntry['role'],
@@ -114,6 +134,8 @@ export async function getTaskRecord(
             tool_calls: entry.toolCalls ? JSON.parse(entry.toolCalls) : undefined,
         })
     }
+    
+    history = applyContextWindow(history, historyLimit)
 
     return {
         id: record.id,
@@ -206,7 +228,8 @@ export async function saveTaskHistory(
 export async function getTaskHistory(
     userId: string,
     taskId: string,
-    role?: MessageRole
+    role?: MessageRole,
+    limit: number = 10
 ): Promise<AgentHistoryEntry[]> {
     const where: Record<string, unknown> = {
         taskRecord: {
@@ -216,12 +239,12 @@ export async function getTaskHistory(
     }
     if (role) where.role = role
 
-    const history = await prisma.taskHistory.findMany({
+    const historyData = await prisma.taskHistory.findMany({
         where,
         orderBy: { createdAt: 'asc' },
     })
 
-    return history.map((entry) => ({
+    let history: AgentHistoryEntry[] = historyData.map((entry) => ({
         role: entry.role as MessageRole,
         content: entry.content,
         iteration: entry.iteration ?? undefined,
@@ -229,6 +252,12 @@ export async function getTaskHistory(
         tool_call_id: entry.toolCallId ?? undefined,
         tool_calls: entry.toolCalls ? JSON.parse(entry.toolCalls) : undefined,
     }))
+
+    if (!role) {
+        history = applyContextWindow(history, limit)
+    }
+
+    return history
 }
 
 export interface HistorySearchResult {
