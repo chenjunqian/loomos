@@ -4,8 +4,6 @@ import { saveTaskHistory, getTaskRecord, updateTaskRecord } from '../database/ta
 import { createTaskForQueue } from '../database/task-queue'
 import {
     getOrCreateSession,
-    setActiveTask,
-    setSessionStatus,
     setLastMessageId,
     clearActiveTask,
     hasActiveTask,
@@ -18,7 +16,7 @@ import {
     CALLBACK_REJECT,
     createCallbackData,
 } from './callbacks'
-import { TelegramBotConfig } from './types'
+import { TelegramBotConfig, TelegramSession } from './types'
 import { AgentStatus, MessageRole } from '../agent/types'
 import { logger } from '../utils/logger'
 
@@ -38,7 +36,7 @@ export function createTelegramBot(config: TelegramBotConfig): Bot {
         const chatId = ctx.chat?.id
         if (!chatId) return
 
-        getOrCreateSession(chatId)
+        await getOrCreateSession(chatId, ctx.from?.username)
         await ctx.reply(
             'Welcome to Loomos AI Agent!\n\n' +
             'Send me any message and I will help you complete your task.\n\n' +
@@ -54,7 +52,7 @@ export function createTelegramBot(config: TelegramBotConfig): Bot {
         const chatId = ctx.chat?.id
         if (!chatId) return
 
-        const session = getOrCreateSession(chatId)
+        const session = await getOrCreateSession(chatId, ctx.from?.username)
 
         if (!session.taskId) {
             await ctx.reply('No active task. Send me a message to start a new task.')
@@ -64,7 +62,7 @@ export function createTelegramBot(config: TelegramBotConfig): Bot {
         const taskInfo = await getTask(session.taskId, session.userId)
         if (!taskInfo) {
             await ctx.reply('Task not found. It may have been deleted.')
-            clearActiveTask(chatId)
+            await clearActiveTask(chatId)
             return
         }
 
@@ -91,14 +89,14 @@ export function createTelegramBot(config: TelegramBotConfig): Bot {
         const chatId = ctx.chat?.id
         if (!chatId) return
 
-        const session = getOrCreateSession(chatId)
+        const session = await getOrCreateSession(chatId, ctx.from?.username)
 
         if (!session.taskId) {
             await ctx.reply('No active task to cancel.')
             return
         }
 
-        clearActiveTask(chatId)
+        await clearActiveTask(chatId)
         await ctx.reply('Current task has been cancelled. Send me a new message to start fresh.')
     })
 
@@ -106,7 +104,7 @@ export function createTelegramBot(config: TelegramBotConfig): Bot {
         const chatId = ctx.chat?.id
         if (!chatId) return
 
-        clearActiveTask(chatId)
+        await clearActiveTask(chatId)
         await ctx.reply('Started a new conversation. Send me a message to begin.')
     })
 
@@ -115,9 +113,9 @@ export function createTelegramBot(config: TelegramBotConfig): Bot {
         const text = ctx.message?.text
         if (!chatId || !text) return
 
-        const session = getOrCreateSession(chatId)
+        const session = await getOrCreateSession(chatId, ctx.from?.username)
 
-        if (hasActiveTask(chatId)) {
+        if (await hasActiveTask(chatId)) {
             await handleContinueConversation(ctx, chatId, text, session)
             return
         }
@@ -155,17 +153,15 @@ async function handleNewTask(
     ctx: Context,
     chatId: number,
     text: string,
-    session: ReturnType<typeof getOrCreateSession>
+    session: TelegramSession
 ): Promise<void> {
     try {
         await ctx.replyWithChatAction('typing')
 
         const result = await createTask(session.userId, text)
 
-        setActiveTask(chatId, result.taskId)
-
         const message = await ctx.reply('Processing your request...')
-        setLastMessageId(chatId, message.message_id)
+        await setLastMessageId(chatId, message.message_id)
 
         logger.info('TelegramBot', `Created task ${result.taskId} for user ${chatId}`)
     } catch (error) {
@@ -179,7 +175,7 @@ async function handleContinueConversation(
     ctx: Context,
     chatId: number,
     text: string,
-    session: ReturnType<typeof getOrCreateSession>
+    session: TelegramSession
 ): Promise<void> {
     if (!session.taskId) {
         await handleNewTask(ctx, chatId, text, session)
@@ -191,7 +187,7 @@ async function handleContinueConversation(
 
         const existingRecord = await getTaskRecord(session.userId, session.taskId)
         if (!existingRecord) {
-            clearActiveTask(chatId)
+            await clearActiveTask(chatId)
             await handleNewTask(ctx, chatId, text, session)
             return
         }
@@ -212,10 +208,8 @@ async function handleContinueConversation(
             priority: 1,
         })
 
-        setSessionStatus(chatId, 'processing')
-
-        const message = await ctx.reply('Continuing with your request...')
-        setLastMessageId(chatId, message.message_id)
+        const message = await ctx.reply('Processing your response...')
+        await setLastMessageId(chatId, message.message_id)
 
         logger.info('TelegramBot', `Continued task ${session.taskId} for user ${chatId}`)
     } catch (error) {
@@ -260,8 +254,6 @@ export async function sendConfirmationRequest(
     await bot.api.sendMessage(chatId, truncatedMessage, {
         reply_markup: keyboard,
     })
-    
-    setSessionStatus(chatId, 'awaiting_confirmation')
-    
+
     logger.info('TelegramBot', `Sent confirmation request for task ${taskId} to chat ${chatId}`)
-}
+    }

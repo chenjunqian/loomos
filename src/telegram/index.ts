@@ -10,6 +10,7 @@ import { AgentStatus, MessageRole, AgentHistoryEntry } from '../agent/types'
 import { TaskQueue } from '@prisma/client'
 import { logger } from '../utils/logger'
 import { WorkerPool, ProgressCallback } from '../queue/worker-pool'
+import { prisma } from '../database/task-queue'
 
 let bot: Bot | null = null
 
@@ -54,10 +55,19 @@ async function handleProgressUpdate(
 ): Promise<void> {
     if (!bot) return
     
-    const chatId = extractChatIdFromUserId(task.userId)
-    if (!chatId) return
+    // Resolve chatId from userId (unified ID) via UserAccount
+    const account = await prisma.userAccount.findFirst({
+        where: {
+            userId: task.userId,
+            provider: 'telegram'
+        }
+    })
+
+    if (!account) return
+    const chatId = parseInt(account.providerId)
+    if (isNaN(chatId)) return
     
-    const session = getSession(chatId)
+    const session = await getSession(chatId)
     if (!session || session.taskId !== task.taskRecordId) return
     
     if (entry.role === MessageRole.Assistant && entry.content) {
@@ -90,24 +100,11 @@ async function handleProgressUpdate(
         } else {
             await bot.api.sendMessage(chatId, 'Task completed successfully.')
         }
-        clearActiveTask(chatId)
+        await clearActiveTask(chatId)
     } else if (taskInfo.status === AgentStatus.Error) {
         await bot.api.sendMessage(chatId, 'Task failed.')
-        clearActiveTask(chatId)
+        await clearActiveTask(chatId)
     }
-}
-
-function extractChatIdFromUserId(userId: string): number | null {
-    const prefix = 'telegram_'
-    if (!userId.startsWith(prefix)) {
-        return null
-    }
-    const chatIdStr = userId.slice(prefix.length)
-    const chatId = parseInt(chatIdStr, 10)
-    if (isNaN(chatId)) {
-        return null
-    }
-    return chatId
 }
 
 export function getBot(): Bot | null {

@@ -109,6 +109,7 @@ export interface TaskRecord {
     status: AgentStatus
     history: AgentHistoryEntry[]
     requiresConfirmation: boolean
+    metadata?: string
     createdAt: Date
     updatedAt: Date
 }

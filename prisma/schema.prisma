@@ -7,17 +7,31 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// FTS5 Virtual Tables (created via raw SQL on startup)
-// - task_history_fts: FTS5 index on TaskHistory.content for full-text search
-// - Triggers: task_history_ai (after insert), task_history_ad (after delete), task_history_au (after update)
-// Note: FTS5 virtual tables cannot be modeled in Prisma schema - managed in src/database/task-record.ts
+// FTS5 Virtual Tables (managed in src/database/task-record.ts)
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
+  id        String   @id @default(uuid())
+  email     String?  @unique
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  accounts      UserAccount[]
+}
+
+model UserAccount {
+  id          String   @id @default(uuid())
+  userId      String
+  provider    String   // 'telegram', 'discord', 'web'
+  providerId  String   // platform-specific ID (e.g., Telegram chatId)
+  username    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@index([userId])
 }
 
 model TaskQueue {
@@ -46,6 +60,7 @@ model TaskRecord {
   userId               String
   status               String   @default("pending")
   requiresConfirmation Boolean  @default(false)
+  metadata             String?  // JSON
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 

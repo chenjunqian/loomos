@@ -85,6 +85,7 @@ export interface UpdateTaskRecordInput {
     status?: AgentStatus
     response?: string
     requiresConfirmation?: boolean
+    metadata?: string
 }
 
 export async function getTaskRecord(
@@ -120,6 +121,7 @@ export async function getTaskRecord(
         status: record.status as AgentStatus,
         history,
         requiresConfirmation: record.requiresConfirmation,
+        metadata: record.metadata ?? undefined,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
     }
@@ -156,6 +158,7 @@ export async function saveTaskRecord(input: CreateTaskRecordInput): Promise<Task
         status: taskRecord.status as AgentStatus,
         history: [],
         requiresConfirmation: taskRecord.requiresConfirmation,
+        metadata: taskRecord.metadata ?? undefined,
         createdAt: taskRecord.createdAt,
         updatedAt: taskRecord.updatedAt,
     }
@@ -172,6 +175,9 @@ export async function updateTaskRecord(
     }
     if (updates.requiresConfirmation !== undefined) {
         data.requiresConfirmation = updates.requiresConfirmation
+    }
+    if (updates.metadata !== undefined) {
+        data.metadata = updates.metadata
     }
 
     await prisma.taskRecord.update({
@@ -328,6 +334,7 @@ export async function getPendingConfirmations(
             status: record.status as AgentStatus,
             history,
             requiresConfirmation: record.requiresConfirmation,
+            metadata: record.metadata ?? undefined,
             createdAt: record.createdAt,
             updatedAt: record.updatedAt,
         }

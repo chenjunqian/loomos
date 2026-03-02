@@ -5,6 +5,7 @@ export type TelegramChatState = 'idle' | 'processing' | 'awaiting_confirmation'
 export interface TelegramSession {
     chatId: number
     userId: string
+    accountId?: string
     taskId: string | null
     status: TelegramChatState
     lastMessageId: number | null

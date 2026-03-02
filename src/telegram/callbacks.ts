@@ -1,6 +1,6 @@
 import { Context } from 'grammy'
 import { confirmTask, getTask } from '../agent/gateway'
-import { getOrCreateSession, setSessionStatus, clearActiveTask, isAwaitingConfirmation } from './session'
+import { getOrCreateSession, clearActiveTask, isAwaitingConfirmation } from './session'
 import { logger } from '../utils/logger'
 
 export const CALLBACK_APPROVE = 'approve'
@@ -27,7 +27,7 @@ export async function handleApproveCallback(ctx: Context, taskId: string): Promi
         return
     }
 
-    const session = getOrCreateSession(chatId)
+    const session = await getOrCreateSession(chatId, ctx.from?.username)
     
     try {
         await ctx.answerCallbackQuery()
@@ -39,7 +39,7 @@ export async function handleApproveCallback(ctx: Context, taskId: string): Promi
             return
         }
 
-        if (!isAwaitingConfirmation(chatId)) {
+        if (!(await isAwaitingConfirmation(chatId))) {
             await ctx.editMessageText('This confirmation is no longer valid.')
             return
         }
@@ -47,15 +47,12 @@ export async function handleApproveCallback(ctx: Context, taskId: string): Promi
         await ctx.editMessageText('Approved. Processing...')
         
         await confirmTask(session.userId, taskId, true)
-        
-        setSessionStatus(chatId, 'processing')
-        
-        logger.info('TelegramBot', `User ${chatId} approved task ${taskId}`)
-    } catch (error) {
+
+        logger.info('TelegramBot', `User ${chatId} approved task ${taskId}`)    } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         logger.error('TelegramBot', `Failed to approve task: ${errorMessage}`)
         await ctx.editMessageText(`Failed to approve: ${errorMessage}`)
-        clearActiveTask(chatId)
+        await clearActiveTask(chatId)
     }
 }
 
@@ -65,7 +62,7 @@ export async function handleRejectCallback(ctx: Context, taskId: string): Promis
         return
     }
 
-    const session = getOrCreateSession(chatId)
+    const session = await getOrCreateSession(chatId, ctx.from?.username)
     
     try {
         await ctx.answerCallbackQuery()
@@ -77,7 +74,7 @@ export async function handleRejectCallback(ctx: Context, taskId: string): Promis
             return
         }
 
-        if (!isAwaitingConfirmation(chatId)) {
+        if (!(await isAwaitingConfirmation(chatId))) {
             await ctx.editMessageText('This confirmation is no longer valid.')
             return
         }
@@ -86,13 +83,13 @@ export async function handleRejectCallback(ctx: Context, taskId: string): Promis
         
         await confirmTask(session.userId, taskId, false)
         
-        clearActiveTask(chatId)
+        await clearActiveTask(chatId)
         
         logger.info('TelegramBot', `User ${chatId} rejected task ${taskId}`)
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         logger.error('TelegramBot', `Failed to reject task: ${errorMessage}`)
         await ctx.editMessageText(`Failed to reject: ${errorMessage}`)
-        clearActiveTask(chatId)
+        await clearActiveTask(chatId)
     }
 }
