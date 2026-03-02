@@ -2,12 +2,13 @@
 
 ## Project Overview
 
-AI Agent API service built on Bun runtime with Hono framework. Implements intelligent agent system with LLM integration, native OpenAI/MCP tool calling, Anthropic Agent Skills support, real-time task history tracking, and human-in-the-loop confirmation. Features user-isolated MCP sessions with Playwright storage state persistence.
+AI Agent API service built on Bun runtime with Hono framework. Implements intelligent agent system with LLM integration, native OpenAI/MCP tool calling, Anthropic Agent Skills support, real-time task history tracking, and human-in-the-loop confirmation. Features user-isolated MCP sessions with Playwright storage state persistence and a Telegram bot interface for remote interaction.
 
 ## Tech Stack
 
 - **Runtime**: Bun
 - **Web Framework**: Hono (^4.11.5)
+- **Telegram Framework**: grammy (^1.34.0)
 - **Language**: TypeScript (strict mode)
 - **Package Manager**: Bun
 - **Database**: Prisma with SQLite (default, supports PostgreSQL)
@@ -153,7 +154,7 @@ return {
 
 ## Architecture
 
-```
+```txt
 src/
 ├── index.ts              # Hono app, route config, middleware, worker pool startup
 ├── routes/
@@ -187,15 +188,21 @@ src/
 │   ├── task-queue.ts     # TaskQueue CRUD, task claiming with locking, stats
 │   ├── task-record.ts    # TaskRecord persistence, history management
 │   └── mcp-session.ts    # User session persistence for Playwright storage state
-└── queue/
-    └── worker-pool.ts    # Background task workers, concurrency control, stale task recovery
-└── scheduler/
-    └── scheduler.ts      # Task scheduler for periodic/cron jobs
-```
+├───queue/
+│   └───worker-pool.ts    # Background task workers, concurrency control, stale task recovery
+├───scheduler/
+│   └───scheduler.ts      # Task scheduler for periodic/cron jobs
+└───telegram/
+    ├───bot.ts            # Bot creation, command handlers, message processing
+    ├───callbacks.ts      # Inline keyboard callback handlers (approve/reject)
+    ├───index.ts          # Telegram bot startup, worker pool event listeners
+    ├───session.ts        # Telegram-specific session and message tracking
+    └───types.ts          # Telegram bot specific TypeScript interfaces
 
 ### Key Patterns
 
 - **Agent**: Closure-based factory with `{ run, getState, confirmAction }`, supports `thinkingMode` and progress callbacks, `activeSkills` for skill activation
+- **Telegram Bot**: Grammy-based bot integration with real-time progress updates via worker pool callbacks and inline confirmation buttons
 - **Gateway**: Task operations module with functions for creating, retrieving, confirming, and stopping tasks; manages TaskRecord and TaskQueue coordination
 - **LLM Client**: Functional factory with optional config overrides, supports streaming via `streamChat`
 - **MCP Client**: Dual-mode (shared & user-isolated) with session state persistence, HTTP/SSE transport support
@@ -250,7 +257,8 @@ Playwright MCP storage state persistence:
 
 ## API Endpoints
 
-```
+```txt
+
 GET  /                    # Health check
 POST /agent/run           # Queue a new agent task
 POST /agent/confirm      # Confirm or reject pending action
@@ -269,6 +277,7 @@ GET  /scheduler/jobs/:id  # Get a scheduled job
 PUT  /scheduler/jobs/:id  # Update a scheduled job
 DELETE /scheduler/jobs/:id # Delete a scheduled job
 POST /scheduler/jobs/:id/run # Manually trigger a scheduled job
+
 ```
 
 ## Configuration
@@ -289,6 +298,8 @@ Environment variables via `.env` files (managed by @dotenvx/dotenvx):
 - `LOG_LEVEL` - Logging level (default: info)
 - `LOG_FILE_ENABLED` - Enable file logging (default: false)
 - `LOG_FILE` - Log file path (default: ./logs/app.log)
+- `TELEGRAM_BOT_TOKEN` - Required token for Telegram bot integration
+- `TELEGRAM_ENABLED` - Enable Telegram bot interface (default: false)
 
 ### MCP Server Configuration
 
@@ -386,6 +397,21 @@ Native OpenAI tool calling support with:
 
 - `filesystem_read_file`, `filesystem_list_directory`, `filesystem_read_file_image`
 - `playwright_navigate`, `playwright_click`, `playwright_screenshot`
+
+### Telegram Bot
+
+Remote interaction via Telegram with the following features:
+
+- **Commands**:
+  - `/start`: Initialize bot and show welcome message
+  - `/status`: Check current task status and ID
+  - `/cancel`: Cancel the active task
+  - `/new`: Reset session and start a new conversation
+- **Real-time Interaction**:
+  - Progress updates streamed as the agent works
+  - Inline buttons for approving or rejecting high-risk actions
+  - Conversation-based task input and continuation
+- **User Mapping**: Automatically maps Telegram users to system users via `UserAccount` provider IDs.
 
 ### Anthropic Agent Skills
 
