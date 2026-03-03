@@ -27,13 +27,22 @@ const PlaywrightBrowserLockFile = `${homedir()}/.loomos/.playwright-install-lock
 
 async function ensurePlaywrightBrowsersInstalled(): Promise<void> {
     const browserCacheDir = `${homedir()}/.cache/ms-playwright`
-    const chromiumBrowserPath = `${browserCacheDir}/chromium-`
+    const { writeFileSync, unlinkSync, readdirSync, mkdirSync } = await import('node:fs')
+    const { dirname } = await import('node:path')
 
-    if (existsSync(chromiumBrowserPath)) {
-        return
+    const checkBrowserExists = () => {
+        if (!existsSync(browserCacheDir)) return false
+        try {
+            const dirs = readdirSync(browserCacheDir)
+            return dirs.some((dir) => dir.startsWith('chromium-'))
+        } catch {
+            return false
+        }
     }
 
-    const { writeFileSync, unlinkSync } = await import('node:fs')
+    if (checkBrowserExists()) {
+        return
+    }
 
     const lockFileExists = existsSync(PlaywrightBrowserLockFile)
     if (lockFileExists) {
@@ -44,7 +53,7 @@ async function ensurePlaywrightBrowsersInstalled(): Promise<void> {
             await new Promise((resolve) => setTimeout(resolve, 2000))
             retries++
         }
-        if (existsSync(chromiumBrowserPath)) {
+        if (checkBrowserExists()) {
             return
         }
         console.warn('[MCP] Browser installation may have failed, will attempt to install anyway')
@@ -52,6 +61,7 @@ async function ensurePlaywrightBrowsersInstalled(): Promise<void> {
 
     console.log('[MCP] Installing Playwright Chromium browser...')
     try {
+        mkdirSync(dirname(PlaywrightBrowserLockFile), { recursive: true })
         writeFileSync(PlaywrightBrowserLockFile, '')
         execSync('bunx -y playwright install chromium', {
             stdio: 'inherit',
