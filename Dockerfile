@@ -46,14 +46,14 @@ COPY prisma ./prisma/
 COPY .env.example ./
 
 # Generate Prisma client
-RUN npx prisma generate
+RUN bunx prisma generate
 
 # Copy source code
 COPY src ./src/
 COPY tsconfig.json ./
 
 # Install Playwright Chromium
-RUN npx -y playwright install chromium
+RUN bunx playwright install chromium
 
 # Build the application
 RUN bun run build
