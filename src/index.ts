@@ -7,6 +7,7 @@ import { schedulerApp } from './routes/scheduler'
 import { workerPool } from './queue/worker-pool'
 import { startScheduler, stopScheduler } from './scheduler/scheduler'
 import { startTelegramBot, stopTelegramBot } from './telegram'
+import { initializeFTS } from './database/task-record'
 
 const app = new Hono()
 
@@ -20,6 +21,12 @@ app.route('/scheduler', schedulerApp)
 app.get('/', (c) => {
     return c.text('Loomos Agent API - Use /agent/*, /queue/*, or /scheduler/* endpoints')
 })
+
+try {
+    await initializeFTS()
+} catch (error) {
+    console.error('[Server] Failed to initialize FTS:', error)
+}
 
 workerPool.start().catch((error) => {
     console.error('[Server] Failed to start worker pool:', error)
