@@ -62,4 +62,4 @@ RUN bun run build
 EXPOSE 3000
 
 # Start command
-CMD ["bun", "run", "start"]
+CMD ["sh", "-c", "bunx prisma db push --accept-data-loss && bun run start"]
