@@ -21,7 +21,7 @@ export const mcpServers: MCPServerConfig[] = [
         enabled: true,
         transport: 'stdio',
         stdio: {
-            command: 'npx',
+            command: 'bunx',
             args: ['-y', '@modelcontextprotocol/server-filesystem', homedir()],
         },
     },
@@ -30,7 +30,7 @@ export const mcpServers: MCPServerConfig[] = [
         enabled: true,
         transport: 'stdio',
         stdio: {
-            command: 'npx',
+            command: 'bunx',
             args: ['-y', '@playwright/mcp@latest', '--browser', 'chromium'],
         },
     },

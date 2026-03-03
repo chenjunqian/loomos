@@ -53,14 +53,14 @@ async function ensurePlaywrightBrowsersInstalled(): Promise<void> {
     console.log('[MCP] Installing Playwright Chromium browser...')
     try {
         writeFileSync(PlaywrightBrowserLockFile, '')
-        execSync('npx -y playwright install chromium', {
+        execSync('bunx -y playwright install chromium', {
             stdio: 'inherit',
             env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: '0' },
         })
         console.log('[MCP] Playwright Chromium installed successfully')
     } catch (error) {
         console.error('[MCP] Failed to install Playwright Chromium:', error)
-        throw new Error('Failed to install Playwright browser. Please run "npx playwright install chromium" manually.')
+        throw new Error('Failed to install Playwright browser. Please run "bunx playwright install chromium" manually.')
     } finally {
         try {
             if (existsSync(PlaywrightBrowserLockFile)) {

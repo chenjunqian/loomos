@@ -32,10 +32,10 @@ bun run build
 bun run start
 
 # Push schema changes to database
-npx prisma db push
+bunx prisma db push
 
 # Generate Prisma client
-npx prisma generate
+bunx prisma generate
 ```
 
 ## Code Style Guidelines
@@ -312,7 +312,7 @@ export const mcpServers: MCPServerConfig[] = [
         enabled: true,
         transport: 'stdio',
         stdio: {
-            command: 'npx',
+            command: 'bunx',
             args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
         },
     },
@@ -321,7 +321,7 @@ export const mcpServers: MCPServerConfig[] = [
         enabled: true,
         transport: 'stdio',
         stdio: {
-            command: 'npx',
+            command: 'bunx',
             args: ['-y', '@playwright/mcp@latest'],
         },
     },
