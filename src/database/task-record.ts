@@ -126,6 +126,7 @@ export async function getTaskRecord(
         history.push({
             role: entry.role as AgentHistoryEntry['role'],
             content: entry.content,
+            reasoning_content: entry.reasoningContent ?? undefined,
             iteration: entry.iteration ?? undefined,
             timestamp: entry.createdAt.getTime(),
             tool_call_id: entry.toolCallId ?? undefined,
@@ -215,6 +216,7 @@ export async function saveTaskHistory(
             taskRecordId,
             role: entry.role,
             content: entry.content,
+            reasoningContent: entry.reasoning_content ?? null,
             iteration: entry.iteration ?? null,
             toolCallId: entry.tool_call_id ?? null,
             toolCalls: entry.tool_calls ? JSON.stringify(entry.tool_calls) : null,
@@ -245,6 +247,7 @@ export async function getTaskHistory(
     let history: AgentHistoryEntry[] = historyData.map((entry) => ({
         role: entry.role as MessageRole,
         content: entry.content,
+        reasoning_content: entry.reasoningContent ?? undefined,
         iteration: entry.iteration ?? undefined,
         timestamp: entry.createdAt.getTime(),
         tool_call_id: entry.toolCallId ?? undefined,
@@ -349,6 +352,7 @@ export async function getPendingConfirmations(
             history.push({
                 role: entry.role as AgentHistoryEntry['role'],
                 content: entry.content,
+                reasoning_content: entry.reasoningContent ?? undefined,
                 iteration: entry.iteration ?? undefined,
                 timestamp: entry.createdAt.getTime(),
                 tool_call_id: entry.toolCallId ?? 'no_tool_call',

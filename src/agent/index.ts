@@ -181,6 +181,7 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
             const rawMessages: (Message & { tool_calls?: ToolCall[] })[] = sortedHistory.map((h) => ({
                 role: h.role,
                 content: h.content,
+                reasoning_content: h.reasoning_content,
                 tool_call_id: h.tool_call_id,
                 tool_calls: h.tool_calls,
             }))
@@ -242,6 +243,9 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                 state.history.push(taskHistory)
                 const response = await think()
                 taskHistory.content = response.content
+                taskHistory.reasoning_content = response.reasoningContent
+                taskHistory.tool_calls = response.toolCalls
+                
                 const shouldConfirm = shouldAskForConfirmation(response.content)
                 logger.debug('Agent', `Should ask for confirmation: ${shouldConfirm}`)
                 if (shouldConfirm) {
@@ -267,8 +271,6 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                 const toolCall = response.toolCalls[0]!
                 const toolName = toolCall.function.name
                 const isMCP = toolName.includes('_')
-
-                taskHistory.tool_calls = response.toolCalls
 
                 // Save assistant entry with tool_calls before executing the tool
                 if (onProgress) await onProgress(taskHistory)

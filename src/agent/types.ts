@@ -80,6 +80,7 @@ export interface AgentState {
 export interface AgentHistoryEntry {
     role: MessageRole
     content: string
+    reasoning_content?: string
     iteration?: number
     timestamp: number
     tool_call_id?: string
