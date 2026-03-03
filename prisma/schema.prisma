@@ -75,6 +75,7 @@ model TaskHistory {
   taskRecordId String
   role         String
   content      String
+  reasoningContent String?
   iteration    Int?
   toolCallId   String?
   toolCalls    String?  // JSON string of tool_calls array
