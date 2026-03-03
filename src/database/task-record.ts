@@ -71,8 +71,6 @@ export async function initializeFTS(): Promise<void> {
     }
 }
 
-initializeFTS()
-
 export interface CreateTaskRecordInput {
     id?: string
     userId: string
