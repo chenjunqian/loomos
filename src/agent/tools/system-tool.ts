@@ -324,7 +324,7 @@ export const systemToolHandlers: Record<string, (args: Record<string, unknown>) 
                                 ? include.slice(1)
                                 : include
                             const globFiles = await glob(globPattern, { cwd: dir })
-                            const matches = globFiles.some(f => entry.endsWith(f))
+                            const matches = globFiles.some((f: string) => entry.endsWith(f))
                             if (!matches && !include.startsWith('!')) {
                                 continue
                             }
