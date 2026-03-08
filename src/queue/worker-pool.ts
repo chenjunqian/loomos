@@ -70,7 +70,7 @@ const processTask = async (
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
 
-        await updateTaskRecord(task.id, {
+        await updateTaskRecord(task.taskRecordId, {
             status: AgentStatus.Error,
         })
 
