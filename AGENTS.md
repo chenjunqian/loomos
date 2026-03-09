@@ -11,6 +11,8 @@ AI Agent API service built on Bun runtime with Hono framework. Implements intell
 - **Telegram Framework**: grammy (^1.34.0)
 - **Language**: TypeScript (strict mode)
 - **Package Manager**: Bun
+- **LLM Library**: @mariozechner/pi-ai (^0.57.1)
+- **Agent Library**: @mariozechner/pi-agent-core (^0.57.1)
 - **Database**: Prisma with SQLite (default, supports PostgreSQL)
 - **MCP SDK**: @modelcontextprotocol/sdk (^1.25.3)
 - **Skills Format**: YAML frontmatter + Markdown
@@ -165,8 +167,8 @@ src/
 ├── utils/
 │   └── logger.ts         # Pino-based structured logging with file rotation
 ├── agent/
-│   ├── index.ts          # Agent factory (createAgent) with thinking mode support
-│   ├── client.ts         # LLM client (createLLMClient) with streaming support
+│   ├── index.ts          # Agent implementation using @mariozechner/pi-agent-core
+│   ├── client.ts         # LLM client factory using @mariozechner/pi-ai
 │   ├── config.ts         # Environment config (getAgentConfig, config)
 │   ├── prompt.ts         # System prompt templates (with/without thinking)
 │   ├── types.ts          # TypeScript interfaces/enums (AgentStatus, MessageRole, etc.)
@@ -201,12 +203,12 @@ src/
 
 ### Key Patterns
 
-- **Agent**: Closure-based factory with `{ run, getState, confirmAction }`, supports `thinkingMode` and progress callbacks, `activeSkills` for skill activation
+- **Agent**: Implementation using `Agent` class from `@mariozechner/pi-agent-core`, supports events via subscription, thinking modes, and `activeSkills` for skill activation. Uses `agent.abort()` for human-in-the-loop confirmation.
 - **Telegram Bot**: Grammy-based bot integration with real-time progress updates via worker pool callbacks and inline confirmation buttons
 - **Gateway**: Task operations module with functions for creating, retrieving, confirming, and stopping tasks; manages TaskRecord and TaskQueue coordination
-- **LLM Client**: Functional factory with optional config overrides, supports streaming via `streamChat`
+- **LLM Client**: Factory utilizing `@mariozechner/pi-ai` to create `Model` instances with optional config overrides.
 - **MCP Client**: Dual-mode (shared & user-isolated) with session state persistence, HTTP/SSE transport support
-- **Tools**: Unified system (system tools + MCP tools), auto-converted to OpenAI format
+- **Tools**: Unified system (system tools + MCP tools), auto-converted to OpenAI format, used with `pi-agent-core`'s tool execution framework.
 - **Skills**: YAML frontmatter + Markdown definitions with allowed-tools scoping, skill activation at runtime
 - **Routes**: Hono chainable API with inline handlers
 - **Database**: TaskRecord with unified TaskHistory, TaskQueue with priority/worker tracking, UserSession for MCP state
@@ -345,8 +347,8 @@ export const mcpServers: MCPServerConfig[] = [
 
 ### Thinking Modes
 
-- **`auto`**: Agent uses ReAct pattern with `<thought>` tags for reasoning
-- **`enabled`**: Explicit thinking mode with reasoning content in responses
+- **`auto`**: Default mode, allows the agent to reason before acting (handled by @mariozechner/pi-agent-core)
+- **`enabled`**: Explicit reasoning content in responses where supported by the model
 - **`disabled`**: Direct execution without reasoning output
 
 ### Human-in-the-Loop
@@ -372,14 +374,13 @@ Agent automatically detects uncertainty and requests confirmation when:
 
 ### Tool Calling
 
-Native OpenAI tool calling support with:
+Integrated tool calling via `@mariozechner/pi-agent-core` with:
 
-- Automatic argument validation
 - Unified tool registry (system + MCP)
-- Handler-based execution
-- MCP tools: filesystem (read_file), playwright (browser automation)
+- Automatic argument validation
 - System tools: read_file, search_file_content, run_shell_command
-- Extensible tool system with `toolHandlers` map
+- MCP tools: filesystem (read_file), playwright (browser automation)
+- Support for human-in-the-loop confirmation of high-risk actions via `agent.abort()` and `confirmAction` flow.
 
 ### MCP Integration
 
