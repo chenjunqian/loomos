@@ -1,4 +1,5 @@
-import { Bot, Context, InlineKeyboard } from 'grammy'
+import { Bot, Context, InlineKeyboard, InputFile } from 'grammy'
+import { existsSync, createReadStream } from 'fs'
 import { createTask, getTask } from '../agent/gateway'
 import {
     getOrCreateSession,
@@ -105,10 +106,46 @@ export function createTelegramBot(config: TelegramBotConfig): Bot {
         await ctx.reply('Started a new conversation. Send me a message to begin.')
     })
 
-    bot.on('message:text', async (ctx: Context) => {
+    bot.on(['message:text', 'message:photo'], async (ctx: Context) => {
         const chatId = ctx.chat?.id
-        const text = ctx.message?.text
-        if (!chatId || !text) return
+        let text = ctx.message?.text || ctx.message?.caption || ''
+        if (!chatId) return
+
+        if (ctx.message?.photo && ctx.message.photo.length > 0) {
+            try {
+                // Get the highest resolution photo
+                const photo = ctx.message.photo[ctx.message.photo.length - 1]
+                if (!photo) return
+                const file = await ctx.api.getFile(photo.file_id)
+                if (file.file_path) {
+                    const fileUrl = `https://api.telegram.org/file/bot${config.token}/${file.file_path}`
+                    const response = await fetch(fileUrl)
+                    const arrayBuffer = await response.arrayBuffer()
+                    const base64Image = Buffer.from(arrayBuffer).toString('base64')
+                    
+                    // Create JSON array for agent
+                    const contentArray = []
+                    if (text) {
+                        contentArray.push({ type: 'text', text })
+                    }
+                    contentArray.push({
+                        type: 'image',
+                        source: {
+                            type: 'base64',
+                            media_type: 'image/jpeg',
+                            data: base64Image
+                        }
+                    })
+                    text = JSON.stringify(contentArray)
+                }
+            } catch (err) {
+                logger.error('TelegramBot', `Failed to process photo: ${err}`)
+                await ctx.reply('Failed to process the uploaded image.')
+                return
+            }
+        }
+
+        if (!text && (!ctx.message?.photo || ctx.message.photo.length === 0)) return
 
         const session = await getOrCreateSession(chatId, ctx.from?.username)
 
@@ -211,7 +248,29 @@ export async function sendAssistantResponse(
     content: string,
     lastMessageId?: number
 ): Promise<void> {
-    const truncatedContent = truncateMessage(content)
+    let finalContent = content;
+    const imageMatch = finalContent.match(/!\[.*?\]\((.*?)\)/);
+
+    if (imageMatch && imageMatch[1]) {
+        const imagePath = imageMatch[1];
+        if (existsSync(imagePath)) {
+            try {
+                // Send the image directly
+                await bot.api.sendPhoto(chatId, new InputFile(createReadStream(imagePath)));
+                // Remove the markdown image from the text to avoid duplicate/broken links in chat
+                finalContent = finalContent.replace(imageMatch[0], '').trim();
+                
+                // If there's no text left, let's just put a placeholder so we can still edit the "Processing..." message
+                if (!finalContent) {
+                    finalContent = "Image sent successfully.";
+                }
+            } catch (err) {
+                logger.error('TelegramBot', `Failed to send photo from ${imagePath}: ${err}`)
+            }
+        }
+    }
+
+    const truncatedContent = truncateMessage(finalContent)
 
     try {
         if (lastMessageId) {

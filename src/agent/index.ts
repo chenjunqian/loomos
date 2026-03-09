@@ -2,31 +2,24 @@ import { config } from './config'
 import { createSystemPrompt } from './prompt'
 import { createLLMClientFromInput } from './client'
 import {
-    ToolCall,
-    ToolResult,
     ToolCallContent,
     AgentState,
     AgentStatus,
     AgentInput,
     AgentOutput,
     AgentHistoryEntry,
-    LLMResponse,
     MessageRole,
     ThinkingMode,
-    Message,
     Tool,
 } from './types'
 import {
     getAllToolsIncludingMCP,
-    toolsToOpenAIFormat,
-    validateToolCall,
-    callToolHandler,
-    getMCPToolHandler,
+    convertToAgentTool,
 } from './tools'
 import { getSkillByName } from './skills'
-import { logger } from '../utils/logger'
+import { Agent, AgentMessage } from '@mariozechner/pi-agent-core'
 
-interface Agent {
+interface AgentInterface {
     run: (input: AgentInput) => Promise<AgentOutput>
     getState: () => Readonly<AgentState>
     confirmAction: (approved: boolean, alternativeInput?: string) => Promise<AgentOutput>
@@ -37,7 +30,43 @@ async function loadAllTools(): Promise<Tool[]> {
     return allTools
 }
 
-function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry) => Promise<void>): Agent {
+const shouldAskForConfirmation = (content: string, state: AgentState): boolean => {
+    if (content.includes('<uncertainty>')) {
+        state.uncertaintyLevel = 1.0
+        return true
+    }
+
+    const uncertaintyIndicators = [
+        /I'm not sure/i,
+        /I need clarification/i,
+        /could you clarify/i,
+        /would you like me to/i,
+        /I'm uncertain/i,
+        /it depends/i,
+        /perhaps/i,
+        /maybe/i,
+        /might\s+(cause|result|lead)/i,
+    ]
+
+    const matches = uncertaintyIndicators.filter((r) => r.test(content)).length
+    state.uncertaintyLevel = matches / uncertaintyIndicators.length
+
+    return state.uncertaintyLevel >= config.uncertainThreshold
+}
+
+const isHighRiskError = (error: string): boolean => {
+    const highRiskPatterns = [
+        /permission denied/i,
+        /access denied/i,
+        /data loss/i,
+        /cannot delete/i,
+        /critical/i,
+        /fatal/i,
+    ]
+    return highRiskPatterns.some((p) => p.test(error))
+}
+
+function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry) => Promise<void>): AgentInterface {
     let toolsCache: Tool[] | null = null
 
     const getAllTools = async (): Promise<Tool[]> => {
@@ -49,8 +78,6 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
 
     const effectiveInput = input || { task: '' }
     const thinkingMode: ThinkingMode = effectiveInput.thinkingMode || 'auto'
-    const effectiveMaxIterations = effectiveInput.maxIterations || config.maxIterations
-    const llmClient = createLLMClientFromInput(effectiveInput)
     const userId = effectiveInput.userId
 
     let state: AgentState = {
@@ -73,142 +100,18 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
         }
     }
 
-    const think = async (): Promise<LLMResponse> => {
-        state.status = thinkingMode !== 'disabled' ? AgentStatus.Thinking : AgentStatus.Executing
-        const tools = await getAllTools()
-        return llmClient.chat(state.messages, toolsToOpenAIFormat(tools))
-    }
-
-    const act = async (toolCall: ToolCall): Promise<ToolResult> => {
-        state.status = AgentStatus.Executing
-
-        const validation = await validateToolCall(toolCall.function.name, JSON.parse(toolCall.function.arguments))
-        if (!validation.valid) {
-            return {
-                success: false,
-                content: '',
-                error: validation.error,
-            }
-        }
-
-        const args = JSON.parse(toolCall.function.arguments)
-
-        const mcpHandler = await getMCPToolHandler(toolCall.function.name, userId)
-        if (mcpHandler) {
-            const result = await mcpHandler(args)
-            const entry: AgentHistoryEntry = {
-                iteration: state.currentIteration,
-                content: result.content,
-                timestamp: Date.now(),
-                role: MessageRole.System,
-            }
-            state.history.push(entry)
-
-            if (result.requiresConfirmation) {
-                state.requiresHumanConfirmation = true
-                state.status = AgentStatus.AwaitingConfirmation
-            }
-
-            return result
-        }
-
-        const result = await callToolHandler(toolCall.function.name, args, userId)
-
-        const entry: AgentHistoryEntry = {
-            iteration: state.currentIteration,
-            content: result.content,
-            timestamp: Date.now(),
-            role: MessageRole.System
-        }
-        state.history.push(entry)
-
-        if (result.requiresConfirmation) {
-            state.requiresHumanConfirmation = true
-            state.status = AgentStatus.AwaitingConfirmation
-        }
-
-        return result
-    }
-
-    const shouldAskForConfirmation = (content: string): boolean => {
-        if (content.includes('<uncertainty>')) {
-            state.uncertaintyLevel = 1.0
-            return true
-        }
-
-        const uncertaintyIndicators = [
-            /I'm not sure/i,
-            /I need clarification/i,
-            /could you clarify/i,
-            /would you like me to/i,
-            /I'm uncertain/i,
-            /it depends/i,
-            /perhaps/i,
-            /maybe/i,
-            /might\s+(cause|result|lead)/i,
-        ]
-
-        const matches = uncertaintyIndicators.filter((r) => r.test(content)).length
-        state.uncertaintyLevel = matches / uncertaintyIndicators.length
-
-        return state.uncertaintyLevel >= config.uncertainThreshold
-    }
-
-    const isHighRiskError = (error: string): boolean => {
-        const highRiskPatterns = [
-            /permission denied/i,
-            /access denied/i,
-            /data loss/i,
-            /cannot delete/i,
-            /critical/i,
-            /fatal/i,
-        ]
-        return highRiskPatterns.some((p) => p.test(error))
-    }
-
     const run = async (input: AgentInput): Promise<AgentOutput> => {
         resetState()
-        state.status = thinkingMode !== 'disabled' ? AgentStatus.Thinking : AgentStatus.Executing
+        state.status = (thinkingMode !== 'disabled' ? AgentStatus.Thinking : AgentStatus.Executing) as AgentStatus
 
-        let historyMessages: Message[] = []
         if (input.taskHistory) {
             state.history.push(...input.taskHistory)
-            const sortedHistory = input.taskHistory.sort((a, b) => a.timestamp - b.timestamp)
-            
-            // Build messages with proper tool_calls assignment
-            // Tool messages have tool_calls stored, but they belong to the assistant message
-            // We need to move tool_calls from tool messages to their preceding assistant messages
-            const rawMessages: (Message & { tool_calls?: ToolCall[] })[] = sortedHistory.map((h) => ({
-                role: h.role,
-                content: h.content,
-                reasoning_content: h.reasoning_content,
-                tool_call_id: h.tool_call_id,
-                tool_calls: h.tool_calls,
-            }))
-            
-            // Process messages: move tool_calls from tool role to preceding assistant role
-            for (let i = 0; i < rawMessages.length; i++) {
-                const msg = rawMessages[i]!
-                if (msg.role === 'tool' && msg.tool_calls) {
-                    // Find preceding assistant message and give it the tool_calls
-                    for (let j = i - 1; j >= 0; j--) {
-                        const prevMsg = rawMessages[j]!
-                        if (prevMsg.role === 'assistant') {
-                            prevMsg.tool_calls = msg.tool_calls
-                            break
-                        }
-                    }
-                    // Remove tool_calls from tool message (it should only have tool_call_id)
-                    msg.tool_calls = undefined
-                }
-            }
-            
-            historyMessages = rawMessages
         }
 
-        const tools = await getAllTools()
-        const systemPrompt = await createSystemPrompt(tools, thinkingMode)
+        const rawTools = await getAllTools()
+        const agentTools = rawTools.map(t => convertToAgentTool(t, userId))
 
+        const systemPrompt = await createSystemPrompt(rawTools, thinkingMode)
         let fullSystemPrompt = systemPrompt
         if (effectiveInput.activeSkills && effectiveInput.activeSkills.length > 0) {
             const activeSkillsContent = effectiveInput.activeSkills
@@ -225,118 +128,217 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
             fullSystemPrompt = systemPrompt + `\n\n=== ACTIVATED SKILLS ===${activeSkillsContent}`
         }
 
-        state.messages = [
-            { role: MessageRole.System, content: fullSystemPrompt },
-            ...historyMessages,
-        ]
-
-        while (state.currentIteration < effectiveMaxIterations) {
-            logger.debug('Agent', `Iteration ${state.currentIteration}/${effectiveMaxIterations}`)
-            let taskHistory: AgentHistoryEntry = {
-                iteration: state.currentIteration,
-                timestamp: Date.now(),
-                role: MessageRole.Assistant,
-                content: '',
+        const initialMessages: AgentMessage[] = input.taskHistory ? input.taskHistory.map(h => {
+            if (h.role === 'tool') {
+                return {
+                    role: 'toolResult',
+                    toolCallId: h.tool_call_id || 'unknown',
+                    content: [{ type: 'text', text: h.content }],
+                    timestamp: h.timestamp
+                } as any;
             }
+            if (h.role === 'assistant') {
+                const contentBlocks: any[] = [];
+                if (h.content) {
+                    contentBlocks.push({ type: 'text', text: h.content });
+                }
+                if (h.tool_calls) {
+                    contentBlocks.push(...h.tool_calls.map(tc => ({
+                        type: 'toolCall',
+                        id: tc.id,
+                        name: tc.function.name,
+                        arguments: JSON.parse(tc.function.arguments)
+                    })));
+                }
+                return {
+                    role: 'assistant',
+                    content: contentBlocks.length > 0 ? contentBlocks : [{ type: 'text', text: '' }],
+                    timestamp: h.timestamp
+                } as any;
+            }
+            let parsedContent: any = h.content;
+            if (h.role === 'user' && typeof h.content === 'string' && h.content.trim().startsWith('[')) {
+                try {
+                    parsedContent = JSON.parse(h.content);
+                } catch (e) {
+                    // Ignore, treat as string
+                }
+            }
+            return {
+                role: h.role,
+                content: parsedContent,
+                timestamp: h.timestamp
+            } as any;
+        }) : [];
 
-            try {
-                state.history.push(taskHistory)
-                const response = await think()
-                taskHistory.content = response.content
-                taskHistory.reasoning_content = response.reasoningContent
-                taskHistory.tool_calls = response.toolCalls
+        const model = createLLMClientFromInput(effectiveInput)
+
+        const agent = new Agent({
+            initialState: {
+                systemPrompt: fullSystemPrompt,
+                model,
+                tools: agentTools as any,
+                messages: initialMessages,
+            }
+        })
+
+        let finalResponse = ''
+        const pendingProgress: Promise<void>[] = []
+
+        const unsubscribe = agent.subscribe((event) => {
+            if (event.type === 'message_end') {
+                const msg = event.message as any;
+                if (msg.role === 'assistant') {
+                    const extractedToolCalls = Array.isArray(msg.content)
+                        ? msg.content.filter((c: any) => c.type === 'toolCall').map((tc: any) => ({
+                            id: tc.id,
+                            type: 'function',
+                            function: {
+                                name: tc.name,
+                                arguments: JSON.stringify(tc.arguments || {})
+                            }
+                        }))
+                        : undefined;
+
+                    const contentStr = Array.isArray(msg.content)
+                        ? msg.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('')
+                        : (typeof msg.content === 'string' ? msg.content : '');
+
+                    const assistantErrorMessage = typeof msg.errorMessage === 'string'
+                        ? msg.errorMessage.trim()
+                        : '';
+                    const hasTextContent = contentStr.trim().length > 0;
+                    const hasToolCalls = (extractedToolCalls?.length || 0) > 0;
+                    const isAbortErrorMessage = assistantErrorMessage === 'Aborted' || assistantErrorMessage === 'Request was aborted';
+
+                    if (
+                        state.status === AgentStatus.AwaitingConfirmation &&
+                        isAbortErrorMessage &&
+                        !hasTextContent &&
+                        !hasToolCalls
+                    ) {
+                        return;
+                    }
+
+                    if (!hasTextContent && !hasToolCalls && assistantErrorMessage.length === 0) {
+                        return;
+                    }
+
+                    const entry: AgentHistoryEntry = {
+                        iteration: state.currentIteration,
+                        timestamp: Date.now(),
+                        role: MessageRole.Assistant,
+                        content: hasTextContent ? contentStr : (assistantErrorMessage ? `Error: ${assistantErrorMessage}` : ''),
+                        tool_calls: hasToolCalls ? extractedToolCalls : undefined
+                    };
+
+                    state.history.push(entry);
+                    if (onProgress) {
+                        pendingProgress.push(onProgress(entry));
+                    }
+
+                    if (hasTextContent && shouldAskForConfirmation(contentStr, state)) {
+                        state.requiresHumanConfirmation = true;
+                        state.status = AgentStatus.AwaitingConfirmation;
+                        agent.abort();
+                    }
+                }
+            } else if (event.type === 'tool_execution_end') {
+                const resultDetails = event.result?.details;
                 
-                const shouldConfirm = shouldAskForConfirmation(response.content)
-                logger.debug('Agent', `Should ask for confirmation: ${shouldConfirm}`)
-                if (shouldConfirm) {
-                    state.requiresHumanConfirmation = true
-                    state.status = AgentStatus.AwaitingConfirmation
-                    if (onProgress) await onProgress(taskHistory)
-                    break
-                }
-
-                if (!response.toolCalls || response.toolCalls.length === 0) {
-                    state.status = AgentStatus.Completed
-                    taskHistory.role = MessageRole.Assistant
-                    logger.debug('Agent', `Completed without tool calls at iteration ${state.currentIteration}`)
-                    if (onProgress) await onProgress(taskHistory)
-                    return {
-                        response: response.content,
-                        status: AgentStatus.Completed,
-                        history: state.history,
-                        requiresConfirmation: false,
-                    }
-                }
-
-                const toolCall = response.toolCalls[0]!
-                const toolName = toolCall.function.name
-                const isMCP = toolName.includes('_')
-
-                // Save assistant entry with tool_calls before executing the tool
-                if (onProgress) await onProgress(taskHistory)
-
-                logger.debug('Agent', `Tool call: ${toolName} (${isMCP ? 'MCP' : 'system'})`)
-                const toolResult = await act(toolCall)
-
-                if (!toolResult.success) {
-                    if (isHighRiskError(toolResult.error || '')) {
-                        state.requiresHumanConfirmation = true
-                        state.status = AgentStatus.AwaitingConfirmation
-                        if (onProgress) await onProgress(taskHistory)
-                        break
-                    }
-                }
-
-                state.messages.push({
-                    role: MessageRole.Assistant,
-                    content: response.content,
-                    reasoning_content: response.reasoningContent,
-                    tool_calls: response.toolCalls,
-                })
-
-                state.messages.push({
-                    role: MessageRole.Tool,
-                    content: toolResult.content,
-                    tool_call_id: toolCall.id,
-                })
-
                 const toolCallContent: ToolCallContent = {
-                    content: toolResult.content,
-                    toolName: toolCall.function.name,
-                }
-                const toolHistoryEntry: AgentHistoryEntry = {
+                    content: event.result?.content?.[0]?.text || '',
+                    toolName: event.toolName,
+                };
+
+                const entry: AgentHistoryEntry = {
                     iteration: state.currentIteration,
                     timestamp: Date.now(),
                     role: MessageRole.Tool,
                     content: JSON.stringify(toolCallContent),
-                    tool_call_id: toolCall.id,
+                    tool_call_id: event.toolCallId,
+                };
+                
+                state.history.push(entry);
+                if (onProgress) {
+                    pendingProgress.push(onProgress(entry));
                 }
-                state.history.push(toolHistoryEntry)
-                if (onProgress) await onProgress(toolHistoryEntry)
 
-                state.currentIteration++
+                state.currentIteration++;
 
-                if (toolCall.function.name === 'ask_user') {
-                    state.requiresHumanConfirmation = true
-                    state.status = AgentStatus.AwaitingConfirmation
-                    break
+                if (resultDetails?.requiresConfirmation || event.toolName === 'ask_user') {
+                    state.requiresHumanConfirmation = true;
+                    state.status = AgentStatus.AwaitingConfirmation;
+                    agent.abort();
+                } else if (resultDetails?.error && isHighRiskError(resultDetails.error)) {
+                    state.requiresHumanConfirmation = true;
+                    state.status = AgentStatus.AwaitingConfirmation;
+                    agent.abort();
                 }
-            } catch (error) {
-                const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-                state.status = AgentStatus.Error
-                taskHistory.content = errorMsg
-                if (onProgress) await onProgress(taskHistory)
-                return {
-                    response: errorMsg,
-                    status: AgentStatus.Error,
-                    history: state.history,
-                    requiresConfirmation: false,
+            }
+        });
+
+        try {
+            let parsedTaskContent: any = input.task;
+            if (typeof input.task === 'string' && input.task.trim().startsWith('[')) {
+                try {
+                    parsedTaskContent = JSON.parse(input.task);
+                } catch (e) {
+                    // Ignore
                 }
+            }
+            await agent.prompt([{ role: 'user', content: parsedTaskContent } as any]);
+            const lastMessage = agent.state.messages[agent.state.messages.length - 1] as any;
+            
+            const hasToolCalls = lastMessage?.content && Array.isArray(lastMessage.content) 
+                ? lastMessage.content.some((c: any) => c.type === 'toolCall')
+                : false;
+
+            if (lastMessage && lastMessage.role === 'assistant') {
+                const assistantErrorMessage = typeof lastMessage.errorMessage === 'string'
+                    ? lastMessage.errorMessage.trim()
+                    : '';
+                const finalTextResponse = Array.isArray(lastMessage.content)
+                    ? lastMessage.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('')
+                    : (typeof lastMessage.content === 'string' ? lastMessage.content : '');
+
+                if (state.status !== AgentStatus.AwaitingConfirmation && (assistantErrorMessage || lastMessage.stopReason === 'error')) {
+                    finalResponse = assistantErrorMessage || 'Unknown error';
+                    state.status = AgentStatus.Error;
+                } else if (!hasToolCalls) {
+                    finalResponse = finalTextResponse;
+                    if (state.status !== AgentStatus.AwaitingConfirmation) {
+                        state.status = AgentStatus.Completed;
+                    }
+                }
+            }
+        } catch (error) {
+            if (state.status !== AgentStatus.AwaitingConfirmation) {
+                state.status = AgentStatus.Error;
+                finalResponse = error instanceof Error ? error.message : 'Unknown error';
+                
+                if (finalResponse !== 'Aborted' && finalResponse !== 'Agent aborted') {
+                    const errorEntry: AgentHistoryEntry = {
+                        iteration: state.currentIteration,
+                        timestamp: Date.now(),
+                        role: MessageRole.Assistant,
+                        content: `Error: ${finalResponse}`,
+                    };
+                    if (onProgress) {
+                        pendingProgress.push(onProgress(errorEntry));
+                    }
+                }
+            }
+        } finally {
+            unsubscribe();
+            // Await all background DB writes to finish before returning to worker pool
+            if (pendingProgress.length > 0) {
+                await Promise.allSettled(pendingProgress);
             }
         }
 
         return {
-            response: 'Task completed (iteration limit reached)',
+            response: finalResponse || (state.status === AgentStatus.AwaitingConfirmation ? 'Awaiting confirmation' : 'Task completed'),
             status: state.status,
             history: state.history,
             requiresConfirmation: state.requiresHumanConfirmation,
@@ -352,27 +354,14 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
             throw new Error('No pending confirmation')
         }
 
-        if (approved && alternativeInput) {
-            state.messages.push({
-                role: MessageRole.User,
-                content: `User guidance: ${alternativeInput}`,
-            })
-        } else if (approved) {
-            state.messages.push({
-                role: MessageRole.User,
-                content: 'Confirmed. Please proceed.',
-            })
-        } else {
-            state.messages.push({
-                role: MessageRole.User,
-                content: 'Not confirmed. Please suggest a different approach.',
-            })
-        }
+        const responseContent = approved 
+            ? (alternativeInput ? `User guidance: ${alternativeInput}` : 'Confirmed. Please proceed.')
+            : 'Not confirmed. Please suggest a different approach.';
 
-        state.requiresHumanConfirmation = false
-        state.status = AgentStatus.Thinking
+        state.requiresHumanConfirmation = false;
+        state.status = AgentStatus.Thinking;
 
-        return run({ task: state.messages.filter((m) => m.role === 'user').pop()?.content || '' })
+        return run({ task: responseContent, taskHistory: state.history });
     }
 
     return {

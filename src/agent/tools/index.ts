@@ -171,3 +171,39 @@ export async function callToolHandler(toolName: string, args: Record<string, unk
         error: `No handler for tool: ${toolName}`,
     }
 }
+
+export function convertToAgentTool(tool: Tool, userId?: string): any {
+    return {
+        name: tool.name,
+        description: tool.description,
+        label: tool.name,
+        parameters: {
+            type: tool.parameters.type,
+            properties: tool.parameters.properties,
+            required: tool.parameters.required,
+        },
+        execute: async (_toolCallId: string, params: Record<string, unknown>) => {
+            const mcpHandler = await getMCPToolHandler(tool.name, userId);
+            let result: ToolResult;
+
+            if (mcpHandler) {
+                result = await mcpHandler(params);
+            } else {
+                result = await callToolHandler(tool.name, params, userId);
+            }
+
+            if (!result.success) {
+                return {
+                    content: [{ type: "text", text: `Error: ${result.error || 'Unknown error'}` }],
+                    details: { requiresConfirmation: result.requiresConfirmation, error: result.error },
+                };
+            }
+
+            return {
+                content: [{ type: "text", text: result.content }],
+                details: { requiresConfirmation: result.requiresConfirmation },
+            };
+        }
+    };
+}
+
