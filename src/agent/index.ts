@@ -156,9 +156,17 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                     timestamp: h.timestamp
                 } as any;
             }
+            let parsedContent: any = h.content;
+            if (h.role === 'user' && typeof h.content === 'string' && h.content.trim().startsWith('[')) {
+                try {
+                    parsedContent = JSON.parse(h.content);
+                } catch (e) {
+                    // Ignore, treat as string
+                }
+            }
             return {
                 role: h.role,
-                content: h.content,
+                content: parsedContent,
                 timestamp: h.timestamp
             } as any;
         }) : [];
@@ -271,7 +279,15 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
         });
 
         try {
-            await agent.prompt([{ role: 'user', content: input.task } as any]);
+            let parsedTaskContent: any = input.task;
+            if (typeof input.task === 'string' && input.task.trim().startsWith('[')) {
+                try {
+                    parsedTaskContent = JSON.parse(input.task);
+                } catch (e) {
+                    // Ignore
+                }
+            }
+            await agent.prompt([{ role: 'user', content: parsedTaskContent } as any]);
             const lastMessage = agent.state.messages[agent.state.messages.length - 1] as any;
             
             const hasToolCalls = lastMessage?.content && Array.isArray(lastMessage.content) 
