@@ -8,7 +8,6 @@ import { getTaskRecord, updateTaskRecord, saveTaskHistory } from '../database/ta
 import { createAgent } from '../agent'
 import { AgentInput, AgentStatus, AgentHistoryEntry } from '../agent/types'
 import { TaskQueue } from '@prisma/client'
-import { cleanupIsolatedMCPClient } from '../agent/mcp/index.js'
 import { logger } from '../utils/logger'
 import { markJobCompleted } from '../scheduler/scheduler'
 
@@ -82,10 +81,6 @@ const processTask = async (
         callbacks.onTaskComplete(task, false, errorMessage)
         callbacks.onTaskError(task, error as Error)
         logger.error('WorkerPool', `Task ${task.id} failed: ${errorMessage}`)
-    } finally {
-        if (task.userId) {
-            await cleanupIsolatedMCPClient(task.userId)
-        }
     }
 }
 

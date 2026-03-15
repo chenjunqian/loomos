@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-AI Agent API service built on Bun runtime with Hono framework. Implements intelligent agent system with LLM integration, native OpenAI/MCP tool calling, Anthropic Agent Skills support, real-time task history tracking, and human-in-the-loop confirmation. Features user-isolated MCP sessions with Playwright storage state persistence and a Telegram bot interface for remote interaction.
+AI Agent API service built on Bun runtime with Hono framework. Implements intelligent agent system with LLM integration, native OpenAI/MCP tool calling, Anthropic Agent Skills support, real-time task history tracking, and human-in-the-loop confirmation. Features a Telegram bot interface for remote interaction.
 
 ## Tech Stack
 
@@ -175,9 +175,9 @@ src/
 │   ├── gateway.ts        # Task operations (createTask, getTask, confirmTask, getTasksByUser, getTaskHistory, stopTask)
 │   ├── mcp/
 │   │   ├── index.ts      # MCP module exports (client, adapter, config)
-│   │   ├── client.ts     # MCP client factory (shared & user-isolated), HTTP/SSE transport
+│   │   ├── client.ts     # MCP client factory, HTTP/SSE transport
 │   │   ├── adapter.ts     # MCP tool to OpenAI tool format conversion
-│   │   └── config.ts      # MCP server configurations (filesystem, playwright)
+│   │   └── config.ts      # MCP server configurations (filesystem)
 │   ├── skills/
 │   │   ├── index.ts      # Skill loader with YAML frontmatter parsing
 │   └── tools/
@@ -189,7 +189,7 @@ src/
 │   ├── db.ts             # Prisma client re-exports
 │   ├── task-queue.ts     # TaskQueue CRUD, task claiming with locking, stats
 │   ├── task-record.ts    # TaskRecord persistence, history management
-│   └── mcp-session.ts    # User session persistence for Playwright storage state
+│   └── user.ts           # User and UserAccount models
 ├───queue/
 │   └───worker-pool.ts    # Background task workers, concurrency control, stale task recovery
 ├───scheduler/
@@ -207,11 +207,11 @@ src/
 - **Telegram Bot**: Grammy-based bot integration with real-time progress updates via worker pool callbacks and inline confirmation buttons
 - **Gateway**: Task operations module with functions for creating, retrieving, confirming, and stopping tasks; manages TaskRecord and TaskQueue coordination
 - **LLM Client**: Factory utilizing `@mariozechner/pi-ai` to create `Model` instances with optional config overrides.
-- **MCP Client**: Dual-mode (shared & user-isolated) with session state persistence, HTTP/SSE transport support
+- **MCP Client**: Shared clients with HTTP/SSE transport support
 - **Tools**: Unified system (system tools + MCP tools), auto-converted to OpenAI format, used with `pi-agent-core`'s tool execution framework.
-- **Skills**: YAML frontmatter + Markdown definitions with allowed-tools scoping, skill activation at runtime
+- **Skills**: YAML frontmatter + Markdown definitions, skill activation at runtime
 - **Routes**: Hono chainable API with inline handlers
-- **Database**: TaskRecord with unified TaskHistory, TaskQueue with priority/worker tracking, UserSession for MCP state
+- **Database**: TaskRecord with unified TaskHistory, TaskQueue with priority/worker tracking
 - **Logging**: Pino-based structured logging with file rotation support
 
 ## Data Models
@@ -249,13 +249,14 @@ Queue management for background task processing:
 
 User entity for multi-user support with session isolation.
 
-### UserSession
+### UserAccount
 
-Playwright MCP storage state persistence:
+User account linking to external providers (Telegram, Discord, etc.):
 
-- `userId`: Unique user identifier (1:1 with User)
-- `storageState`: JSON string containing browser cookies and origins
-- Used by user-isolated MCP clients to restore browser sessions
+- `userId`: Reference to User
+- `provider`: Platform identifier (e.g., 'telegram')
+- `providerId`: Platform-specific ID
+- Used for mapping external users to internal users
 
 ## API Endpoints
 
@@ -295,8 +296,6 @@ Environment variables via `.env` files (managed by @dotenvx/dotenvx):
 - `DATABASE_URL` - Database connection (default: file:./dev.db)
 - `DATABASE_PROVIDER` - Database type: `sqlite` or `postgresql` (auto-detected from DATABASE_URL)
 - `SKILLS_PATH` - Path to skills directory (default: ./skills)
-- `PLAYWRIGHT_SESSION_SYNC_INTERVAL_MS` - Session sync interval ms (default: 30000)
-- `PLAYWRIGHT_MCP_USER_DATA_DIR` - Base directory for user Playwright data (default: /tmp/loomos-mcp)
 - `LOG_LEVEL` - Logging level (default: info)
 - `LOG_FILE_ENABLED` - Enable file logging (default: false)
 - `LOG_FILE` - Log file path (default: ./logs/app.log)
@@ -316,23 +315,6 @@ export const mcpServers: MCPServerConfig[] = [
         stdio: {
             command: 'bunx',
             args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
-        },
-    },
-    {
-        name: 'playwright',
-        enabled: true,
-        transport: 'stdio',
-        stdio: {
-            command: 'bunx',
-            args: ['-y', '@playwright/mcp@latest'],
-        },
-    },
-    {
-        name: 'remote-server',
-        enabled: true,
-        transport: 'http',
-        http: {
-            url: 'http://localhost:3000/sse',
         },
     },
 ]
@@ -379,25 +361,18 @@ Integrated tool calling via `@mariozechner/pi-agent-core` with:
 - Unified tool registry (system + MCP)
 - Automatic argument validation
 - System tools: read_file, search_file_content, run_shell_command
-- MCP tools: filesystem (read_file), playwright (browser automation)
+- MCP tools: filesystem (read_file, list_directory)
 - Support for human-in-the-loop confirmation of high-risk actions via `agent.abort()` and `confirmAction` flow.
 
 ### MCP Integration
 
 **Model Context Protocol** support with:
 
-- **Shared Clients**: Global MCP server connections (filesystem, playwright)
-- **User-Isolated Clients**: Per-user MCP sessions with:
-  - Isolated browser storage directories
-  - Playwright storage state persistence to database
-  - Periodic sync (configurable interval)
-  - Session restore on reconnect
-  - Automatic cleanup on disconnect
+- **Shared Clients**: Global MCP server connections (filesystem)
 
 **MCP Tool Naming**: MCP tools are prefixed with server name:
 
 - `filesystem_read_file`, `filesystem_list_directory`, `filesystem_read_file_image`
-- `playwright_navigate`, `playwright_click`, `playwright_screenshot`
 
 ### Telegram Bot
 
@@ -423,7 +398,6 @@ Skills are markdown files with YAML frontmatter defining agent capabilities:
 name: code-review
 description: Use this skill for any code review task...
 license: MIT
-allowed-tools: read_file search_file_content run_shell_command
 version: 1.0.0
 ---
 

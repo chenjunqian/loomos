@@ -1,11 +1,11 @@
 # Loomos
 
-A generic AI agent for daily life. Built on Bun + Hono, it leverages Playwright MCP for browser automation and Find-Skill for capability discovery to complete your tasks. Run it locally or deploy to a server.
+A generic AI agent for daily life. Built on Bun + Hono, it leverages MCP (Model Context Protocol) for file operations and agent-browser skill for browser automation to complete your tasks. Run it locally or deploy to a server.
 
 ## Features
 
 - 🧠 **Intelligent Reasoning** - Thinks step-by-step to solve complex tasks
-- 🌐 **Browser Automation** - Uses Playwright MCP to interact with websites
+- 🌐 **Browser Automation** - Uses agent-browser skill to interact with websites
 - 🔍 **Skill Discovery** - Finds and applies relevant skills via Find-Skill
 - 🤖 **Telegram Interface** - Interact with your agent remotely via a Telegram bot
 - 🌉 **Task Gateway** - Unified task management across API and Telegram interfaces
