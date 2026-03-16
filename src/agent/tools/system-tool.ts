@@ -2,6 +2,8 @@ import { Tool, ToolResult } from '../types'
 import { glob } from 'glob'
 import { searchTaskHistory } from '../../database/task-record'
 import { createScheduledJob } from '../../database/scheduled-job'
+import { getUserProfile, upsertUserProfile } from '../../database/user-profile'
+import { unlink } from 'node:fs/promises'
 
 export const systemTools: Tool[] = [
     {
@@ -262,7 +264,7 @@ export async function askUser(args: AskUserArgs): Promise<ToolResult> {
     }
 }
 
-export const systemToolHandlers: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
+export const systemToolHandlers: Record<string, (args: Record<string, unknown>, userId?: string) => Promise<ToolResult>> = {
     ask_user: async (args) => {
         const questionsStr = args.questions as string
         return askUser({ questions: questionsStr, context: args.context as string })
@@ -365,9 +367,45 @@ export const systemToolHandlers: Record<string, (args: Record<string, unknown>) 
             }
         }
     },
-    bash: async (args) => {
-        const command = args.command as string
+    bash: async (args, userId) => {
+        let command = args.command as string
         const workdir = args.workdir as string | undefined
+
+        // Detect agent-browser command and sync user profile to disk
+        let sessionName = 'default'
+        let tempPath: string | null = null
+        let isAgentBrowser = false
+
+        if (command.trim().startsWith('agent-browser') && userId) {
+            isAgentBrowser = true
+            // Extract session name if specified: --session-name name or --session name
+            const sessionMatch = command.match(/--session(?:-name)?\s+([^\s]+)/)
+            if (sessionMatch) {
+                sessionName = sessionMatch[1] || 'default'
+            }
+
+            // Generate a temporary state file path
+            tempPath = `/tmp/agent-browser-state-${userId}-${sessionName}.json`
+
+            try {
+                // Fetch profile data from database
+                const profile = await getUserProfile(userId, sessionName)
+                if (profile && profile.data) {
+                    await Bun.write(tempPath, profile.data)
+                } else {
+                    // Create an empty state file if not found
+                    await Bun.write(tempPath, JSON.stringify({ cookies: [], localStorage: {} }))
+                }
+
+                // Inject --state tempPath if it's not already there
+                if (!command.includes('--state')) {
+                    // Insert --state after 'agent-browser' command
+                    command = command.replace('agent-browser', `agent-browser --state ${tempPath}`)
+                }
+            } catch (error) {
+                console.error('Failed to prepare user profile state file:', error)
+            }
+        }
 
         try {
             const childProcess = Bun.spawn({
@@ -402,6 +440,20 @@ export const systemToolHandlers: Record<string, (args: Record<string, unknown>) 
             const stderr = new TextDecoder('utf-8').decode(stderrChunks.length > 0 ? stderrChunks.reduce((a, b) => new Uint8Array([...a, ...b])) : new Uint8Array())
             const exitCode = childProcess.exitCode
             const combinedOutput = [stdout, stderr].filter(Boolean).join('\n')
+
+            // After command execution, if it was agent-browser, sync the state back to DB
+            if (isAgentBrowser && userId && tempPath) {
+                try {
+                    const tempFile = Bun.file(tempPath)
+                    if (await tempFile.exists()) {
+                        const updatedData = await tempFile.text()
+                        await upsertUserProfile(userId, sessionName, updatedData)
+                        await unlink(tempPath) // Clean up
+                    }
+                } catch (error) {
+                    console.error('Failed to sync user profile state back to DB:', error)
+                }
+            }
 
             if (exitCode !== 0) {
                 return {
