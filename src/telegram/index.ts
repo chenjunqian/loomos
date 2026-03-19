@@ -128,8 +128,23 @@ async function handleTaskComplete(
             .filter(h => h.role === MessageRole.Assistant)
             .pop()
         
-        const confirmationMessage = lastAssistantEntry?.content || 
+        let confirmationMessage = lastAssistantEntry?.content || 
             'The agent needs your confirmation to proceed.'
+
+        const lastToolEntry = taskInfo.history
+            .filter(h => h.role === MessageRole.Tool)
+            .pop()
+            
+        if (lastToolEntry?.content && typeof lastToolEntry.content === 'string') {
+            try {
+                const toolContent = JSON.parse(lastToolEntry.content)
+                if (toolContent.toolName === 'ask_user' && toolContent.content) {
+                    confirmationMessage = toolContent.content
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
         
         await sendConfirmationRequest(bot, chatId, task.taskRecordId, confirmationMessage)
         return

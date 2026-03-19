@@ -1,6 +1,6 @@
 import { Context } from 'grammy'
 import { confirmTask, getTask } from '../agent/gateway'
-import { getOrCreateSession, clearActiveTask, isAwaitingConfirmation } from './session'
+import { getOrCreateSession, clearActiveTask, isAwaitingConfirmation, setLastMessageId } from './session'
 import { logger } from '../utils/logger'
 
 export const CALLBACK_APPROVE = 'approve'
@@ -32,26 +32,35 @@ export async function handleApproveCallback(ctx: Context, taskId: string): Promi
     try {
         await ctx.answerCallbackQuery()
         
+        const originalText = ctx.callbackQuery?.message?.text
+        const formatMessage = (status: string) => 
+            originalText ? `${originalText.slice(0, 4000)}\n\n${status}` : status
+
         const taskInfo = await getTask(taskId, session.userId)
         
         if (!taskInfo) {
-            await ctx.editMessageText('Task not found.')
+            await ctx.editMessageText(formatMessage('⚠️ Task not found.'))
             return
         }
 
         if (!(await isAwaitingConfirmation(chatId))) {
-            await ctx.editMessageText('This confirmation is no longer valid.')
+            await ctx.editMessageText(formatMessage('⚠️ This confirmation is no longer valid.'))
             return
         }
 
-        await ctx.editMessageText('Approved. Processing...')
+        await ctx.editMessageText(formatMessage('✅ Approved. Processing...'))
         
         await confirmTask(session.userId, taskId, true)
+        
+        const newMessage = await ctx.api.sendMessage(chatId, 'Processing...')
+        await setLastMessageId(chatId, newMessage.message_id)
 
-        logger.info('TelegramBot', `User ${chatId} approved task ${taskId}`)    } catch (error) {
+        logger.info('TelegramBot', `User ${chatId} approved task ${taskId}`)
+    } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        const originalText = ctx.callbackQuery?.message?.text
         logger.error('TelegramBot', `Failed to approve task: ${errorMessage}`)
-        await ctx.editMessageText(`Failed to approve: ${errorMessage}`)
+        await ctx.editMessageText(originalText ? `${originalText.slice(0, 4000)}\n\n❌ Failed to approve: ${errorMessage}` : `Failed to approve: ${errorMessage}`)
         await clearActiveTask(chatId)
     }
 }
@@ -67,19 +76,23 @@ export async function handleRejectCallback(ctx: Context, taskId: string): Promis
     try {
         await ctx.answerCallbackQuery()
         
+        const originalText = ctx.callbackQuery?.message?.text
+        const formatMessage = (status: string) => 
+            originalText ? `${originalText.slice(0, 4000)}\n\n${status}` : status
+
         const taskInfo = await getTask(taskId, session.userId)
         
         if (!taskInfo) {
-            await ctx.editMessageText('Task not found.')
+            await ctx.editMessageText(formatMessage('⚠️ Task not found.'))
             return
         }
 
         if (!(await isAwaitingConfirmation(chatId))) {
-            await ctx.editMessageText('This confirmation is no longer valid.')
+            await ctx.editMessageText(formatMessage('⚠️ This confirmation is no longer valid.'))
             return
         }
 
-        await ctx.editMessageText('Rejected. Task cancelled.')
+        await ctx.editMessageText(formatMessage('❌ Rejected. Task cancelled.'))
         
         await confirmTask(session.userId, taskId, false)
         
@@ -88,8 +101,9 @@ export async function handleRejectCallback(ctx: Context, taskId: string): Promis
         logger.info('TelegramBot', `User ${chatId} rejected task ${taskId}`)
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        const originalText = ctx.callbackQuery?.message?.text
         logger.error('TelegramBot', `Failed to reject task: ${errorMessage}`)
-        await ctx.editMessageText(`Failed to reject: ${errorMessage}`)
+        await ctx.editMessageText(originalText ? `${originalText.slice(0, 4000)}\n\n❌ Failed to reject: ${errorMessage}` : `Failed to reject: ${errorMessage}`)
         await clearActiveTask(chatId)
     }
 }

@@ -190,7 +190,12 @@ async function handleNewTask(
     session: TelegramSession
 ): Promise<void> {
     try {
-        await ctx.replyWithChatAction('typing')
+        try {
+            await ctx.replyWithChatAction('typing')
+        } catch (e) {
+            // Ignore typing indicator errors
+            logger.info('TelegramBot', `Failed to send typing action: ${e instanceof Error ? e.message : 'Unknown error'}`)
+        }
 
         const result = await createTask(session.userId, text)
 
@@ -217,7 +222,12 @@ async function handleContinueConversation(
     }
 
     try {
-        await ctx.replyWithChatAction('typing')
+        try {
+            await ctx.replyWithChatAction('typing')
+        } catch (e) {
+            // Ignore typing indicator errors
+            logger.info('TelegramBot', `Failed to send typing action: ${session.taskId} - ${e instanceof Error ? e.message : 'Unknown error'}`)
+        }
 
         const taskInfo = await getTask(session.taskId, session.userId)
         if (!taskInfo) {

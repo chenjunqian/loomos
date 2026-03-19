@@ -209,7 +209,7 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                         : '';
                     const hasTextContent = contentStr.trim().length > 0;
                     const hasToolCalls = (extractedToolCalls?.length || 0) > 0;
-                    const isAbortErrorMessage = assistantErrorMessage === 'Aborted' || assistantErrorMessage === 'Request was aborted';
+                    const isAbortErrorMessage = assistantErrorMessage === 'Aborted' || /aborted/i.test(assistantErrorMessage);
 
                     if (
                         state.status === AgentStatus.AwaitingConfirmation &&
@@ -317,7 +317,7 @@ function createAgent(input?: AgentInput, onProgress?: (entry: AgentHistoryEntry)
                 state.status = AgentStatus.Error;
                 finalResponse = error instanceof Error ? error.message : 'Unknown error';
                 
-                if (finalResponse !== 'Aborted' && finalResponse !== 'Agent aborted') {
+                if (finalResponse !== 'Aborted' && finalResponse !== 'Agent aborted' && !/aborted/i.test(finalResponse)) {
                     const errorEntry: AgentHistoryEntry = {
                         iteration: state.currentIteration,
                         timestamp: Date.now(),
