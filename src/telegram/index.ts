@@ -2,9 +2,6 @@ import { Bot } from 'grammy'
 import { createTelegramBot, sendAssistantResponse, sendConfirmationRequest } from './bot'
 import { TelegramBotConfig } from './types'
 import { getTask } from '../agent/gateway'
-import { 
-    clearActiveTask,
-} from './session'
 import { AgentStatus, MessageRole, AgentHistoryEntry } from '../agent/types'
 import { TaskQueue } from '@prisma/client'
 import { logger } from '../utils/logger'
@@ -159,11 +156,9 @@ async function handleTaskComplete(
         if (!lastAssistantEntry?.content) {
             await bot.api.sendMessage(chatId, 'Task completed successfully.')
         }
-        await clearActiveTask(chatId)
     } else if (taskInfo.status === AgentStatus.Error) {
         const errorMsg = error || 'Task failed.'
         await bot.api.sendMessage(chatId, errorMsg)
-        await clearActiveTask(chatId)
     }
 }
 

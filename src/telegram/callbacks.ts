@@ -96,8 +96,6 @@ export async function handleRejectCallback(ctx: Context, taskId: string): Promis
         
         await confirmTask(session.userId, taskId, false)
         
-        await clearActiveTask(chatId)
-        
         logger.info('TelegramBot', `User ${chatId} rejected task ${taskId}`)
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
