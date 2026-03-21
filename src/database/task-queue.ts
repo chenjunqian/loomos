@@ -86,7 +86,7 @@ async function claimTaskPostgreSQL(workerId: string): Promise<TaskQueue | null> 
     const result = await prisma.$queryRaw`
     UPDATE "TaskQueue"
     SET 
-      status = ${TASK_STATUS.PENDING},
+      status = ${TASK_STATUS.PROCESSING},
       "workerId" = ${workerId},
       "startedAt" = NOW(),
       attempts = attempts + 1

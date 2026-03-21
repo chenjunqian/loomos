@@ -1,6 +1,6 @@
 import { Context } from 'grammy'
 import { confirmTask, getTask } from '../agent/gateway'
-import { getOrCreateSession, clearActiveTask, isAwaitingConfirmation, setLastMessageId } from './session'
+import { getOrCreateSession, clearActiveTask, isAwaitingConfirmation, setActiveTask, setLastMessageId } from './session'
 import { logger } from '../utils/logger'
 
 export const CALLBACK_APPROVE = 'approve'
@@ -51,6 +51,7 @@ export async function handleApproveCallback(ctx: Context, taskId: string): Promi
         await ctx.editMessageText(formatMessage('✅ Approved. Processing...'))
         
         await confirmTask(session.userId, taskId, true)
+        await setActiveTask(chatId, taskId, ctx.from?.username)
         
         const newMessage = await ctx.api.sendMessage(chatId, 'Processing...')
         await setLastMessageId(chatId, newMessage.message_id)

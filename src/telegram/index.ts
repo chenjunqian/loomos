@@ -8,6 +8,7 @@ import { logger } from '../utils/logger'
 import { WorkerPool, ProgressCallback, CompleteCallback } from '../queue/worker-pool'
 import { prisma } from '../database/task-queue'
 import { getTaskRecord } from '../database/task-record'
+import { clearActiveTaskByUser } from './session'
 
 let bot: Bot | null = null
 
@@ -146,6 +147,10 @@ async function handleTaskComplete(
         await sendConfirmationRequest(bot, chatId, task.taskRecordId, confirmationMessage)
         return
     }
+
+    if (taskInfo.status === AgentStatus.Cancelled) {
+        await clearActiveTaskByUser(task.userId, task.taskRecordId)
+    }
     
     if (taskInfo.status === AgentStatus.Completed) {
         const lastAssistantEntry = taskInfo.history
@@ -155,6 +160,10 @@ async function handleTaskComplete(
         // Only send completion if we haven't already sent this text via progress
         if (!lastAssistantEntry?.content) {
             await bot.api.sendMessage(chatId, 'Task completed successfully.')
+        }
+    } else if (taskInfo.status === AgentStatus.Cancelled) {
+        if (error && error !== 'Stopped by user') {
+            await bot.api.sendMessage(chatId, error)
         }
     } else if (taskInfo.status === AgentStatus.Error) {
         const errorMsg = error || 'Task failed.'

@@ -6,6 +6,7 @@ import {
     setLastMessageId,
     clearActiveTask,
     hasActiveTask,
+    setActiveTask,
 } from './session'
 import {
     parseCallbackData,
@@ -69,7 +70,9 @@ export function createTelegramBot(config: TelegramBotConfig): Bot {
             thinking: '🤔',
             executing: '⚡',
             awaiting_confirmation: '⏳',
+            awaiting_action: '💬',
             completed: '✅',
+            cancelled: '🛑',
             error: '❌',
         }
 
@@ -198,6 +201,7 @@ async function handleNewTask(
         }
 
         const result = await createTask(session.userId, text)
+        await setActiveTask(chatId, result.taskId, ctx.from?.username)
 
         const message = await ctx.reply('Processing your request...')
         await setLastMessageId(chatId, message.message_id)
