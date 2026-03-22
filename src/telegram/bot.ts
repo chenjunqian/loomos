@@ -12,11 +12,13 @@ import {
     parseCallbackData,
     handleApproveCallback,
     handleRejectCallback,
+    handleChoiceCallback,
     CALLBACK_APPROVE,
     CALLBACK_REJECT,
+    CALLBACK_CHOICE,
     createCallbackData,
 } from './callbacks'
-import { TelegramBotConfig, TelegramSession } from './types'
+import { TelegramBotConfig, TelegramConfirmationRequest, TelegramSession } from './types'
 import { logger } from '../utils/logger'
 
 const MAX_MESSAGE_LENGTH = 4096
@@ -174,6 +176,8 @@ export function createTelegramBot(config: TelegramBotConfig): Bot {
             await handleApproveCallback(ctx, parsed.taskId)
         } else if (parsed.action === CALLBACK_REJECT) {
             await handleRejectCallback(ctx, parsed.taskId)
+        } else if (parsed.action === CALLBACK_CHOICE) {
+            await handleChoiceCallback(ctx, parsed.taskId, parsed.value)
         } else {
             await ctx.answerCallbackQuery('Unknown action')
         }
@@ -302,13 +306,22 @@ export async function sendConfirmationRequest(
     bot: Bot,
     chatId: number,
     taskId: string,
-    confirmationMessage: string
+    confirmationRequest: TelegramConfirmationRequest
 ): Promise<void> {
     const keyboard = new InlineKeyboard()
-        .text('Approve', createCallbackData(CALLBACK_APPROVE, taskId))
-        .text('Reject', createCallbackData(CALLBACK_REJECT, taskId))
 
-    const truncatedMessage = truncateMessage(confirmationMessage)
+    if (confirmationRequest.mode === 'ask_user' && confirmationRequest.options?.length) {
+        confirmationRequest.options.forEach((option, index) => {
+            const buttonText = truncateMessage(`${index + 1}. ${option}`, 60)
+            keyboard.text(buttonText, createCallbackData(CALLBACK_CHOICE, taskId, index.toString())).row()
+        })
+    } else {
+        keyboard
+            .text('Approve', createCallbackData(CALLBACK_APPROVE, taskId))
+            .text('Reject', createCallbackData(CALLBACK_REJECT, taskId))
+    }
+
+    const truncatedMessage = truncateMessage(confirmationRequest.message)
 
     await bot.api.sendMessage(chatId, truncatedMessage, {
         reply_markup: keyboard,

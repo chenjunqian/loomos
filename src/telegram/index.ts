@@ -9,6 +9,8 @@ import { WorkerPool, ProgressCallback, CompleteCallback } from '../queue/worker-
 import { prisma } from '../database/task-queue'
 import { getTaskRecord } from '../database/task-record'
 import { clearActiveTaskByUser } from './session'
+import { createAskUserConfirmationRequest, createDefaultConfirmationRequest } from './confirmation'
+import { extractLatestAskUserContent, extractLatestAskUserPrompt } from './ask-user'
 
 let bot: Bot | null = null
 
@@ -126,25 +128,21 @@ async function handleTaskComplete(
             .filter(h => h.role === MessageRole.Assistant)
             .pop()
         
-        let confirmationMessage = lastAssistantEntry?.content || 
-            'The agent needs your confirmation to proceed.'
+        let confirmationRequest = createDefaultConfirmationRequest(
+            lastAssistantEntry?.content || 'The agent needs your confirmation to proceed.'
+        )
 
-        const lastToolEntry = taskInfo.history
-            .filter(h => h.role === MessageRole.Tool)
-            .pop()
-            
-        if (lastToolEntry?.content && typeof lastToolEntry.content === 'string') {
-            try {
-                const toolContent = JSON.parse(lastToolEntry.content)
-                if (toolContent.toolName === 'ask_user' && toolContent.content) {
-                    confirmationMessage = toolContent.content
-                }
-            } catch (e) {
-                // Ignore parse errors
+        const askUserPrompt = extractLatestAskUserPrompt(taskInfo.history)
+        if (askUserPrompt) {
+            confirmationRequest = createAskUserConfirmationRequest(askUserPrompt)
+        } else {
+            const askUserContent = extractLatestAskUserContent(taskInfo.history)
+            if (askUserContent) {
+                confirmationRequest = createDefaultConfirmationRequest(askUserContent)
             }
         }
         
-        await sendConfirmationRequest(bot, chatId, task.taskRecordId, confirmationMessage)
+        await sendConfirmationRequest(bot, chatId, task.taskRecordId, confirmationRequest)
         return
     }
 

@@ -25,6 +25,12 @@ export interface TelegramBotConfig {
     enabled: boolean
 }
 
+export interface TelegramConfirmationRequest {
+    mode: 'default' | 'ask_user'
+    message: string
+    options?: string[]
+}
+
 export interface TelegramTaskCallbacks {
     onProgress?: (update: TelegramProgressUpdate) => void
     onTaskComplete?: (taskId: string, userId: string, success: boolean, error?: string) => void
