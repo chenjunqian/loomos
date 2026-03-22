@@ -64,6 +64,7 @@ export enum AgentStatus {
     AwaitingConfirmation = 'awaiting_confirmation',
     Executing = 'executing',
     Completed = 'completed',
+    Cancelled = 'cancelled',
     Error = 'error',
 }
 

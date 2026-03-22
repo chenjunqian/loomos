@@ -1,6 +1,6 @@
 import { AgentStatus, AgentHistoryEntry } from '../agent/types'
 
-export type TelegramChatState = 'idle' | 'processing' | 'awaiting_confirmation'
+export type TelegramChatState = AgentStatus
 
 export interface TelegramSession {
     chatId: number
@@ -23,6 +23,12 @@ export interface TelegramProgressUpdate {
 export interface TelegramBotConfig {
     token: string
     enabled: boolean
+}
+
+export interface TelegramConfirmationRequest {
+    mode: 'default' | 'ask_user'
+    message: string
+    options?: string[]
 }
 
 export interface TelegramTaskCallbacks {

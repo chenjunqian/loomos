@@ -1,24 +1,28 @@
 import { Context } from 'grammy'
 import { confirmTask, getTask } from '../agent/gateway'
-import { getOrCreateSession, clearActiveTask, isAwaitingConfirmation, setLastMessageId } from './session'
+import { getOrCreateSession, clearActiveTask, isAwaitingConfirmation, setActiveTask, setLastMessageId } from './session'
 import { logger } from '../utils/logger'
+import { extractLatestAskUserPrompt } from './ask-user'
 
 export const CALLBACK_APPROVE = 'approve'
 export const CALLBACK_REJECT = 'reject'
+export const CALLBACK_CHOICE = 'choice'
 
-export function parseCallbackData(data: string): { action: string; taskId: string } | null {
+export function parseCallbackData(data: string): { action: string; taskId: string; value?: string } | null {
     const parts = data.split(':')
-    if (parts.length !== 2) {
+    if (parts.length < 2 || parts.length > 3) {
         return null
     }
+
     return {
         action: parts[0]!,
         taskId: parts[1]!,
+        value: parts[2],
     }
 }
 
-export function createCallbackData(action: string, taskId: string): string {
-    return `${action}:${taskId}`
+export function createCallbackData(action: string, taskId: string, value?: string): string {
+    return value ? `${action}:${taskId}:${value}` : `${action}:${taskId}`
 }
 
 export async function handleApproveCallback(ctx: Context, taskId: string): Promise<void> {
@@ -51,6 +55,7 @@ export async function handleApproveCallback(ctx: Context, taskId: string): Promi
         await ctx.editMessageText(formatMessage('✅ Approved. Processing...'))
         
         await confirmTask(session.userId, taskId, true)
+        await setActiveTask(chatId, taskId, ctx.from?.username)
         
         const newMessage = await ctx.api.sendMessage(chatId, 'Processing...')
         await setLastMessageId(chatId, newMessage.message_id)
@@ -102,6 +107,65 @@ export async function handleRejectCallback(ctx: Context, taskId: string): Promis
         const originalText = ctx.callbackQuery?.message?.text
         logger.error('TelegramBot', `Failed to reject task: ${errorMessage}`)
         await ctx.editMessageText(originalText ? `${originalText.slice(0, 4000)}\n\n❌ Failed to reject: ${errorMessage}` : `Failed to reject: ${errorMessage}`)
+        await clearActiveTask(chatId)
+    }
+}
+
+export async function handleChoiceCallback(ctx: Context, taskId: string, value?: string): Promise<void> {
+    const chatId = ctx.chat?.id
+    if (!chatId) {
+        return
+    }
+
+    const session = await getOrCreateSession(chatId, ctx.from?.username)
+
+    try {
+        await ctx.answerCallbackQuery()
+
+        const originalText = ctx.callbackQuery?.message?.text
+        const formatMessage = (status: string) =>
+            originalText ? `${originalText.slice(0, 4000)}\n\n${status}` : status
+
+        const taskInfo = await getTask(taskId, session.userId)
+
+        if (!taskInfo) {
+            await ctx.editMessageText(formatMessage('⚠️ Task not found.'))
+            return
+        }
+
+        if (!(await isAwaitingConfirmation(chatId))) {
+            await ctx.editMessageText(formatMessage('⚠️ This confirmation is no longer valid.'))
+            return
+        }
+
+        const askUserPrompt = extractLatestAskUserPrompt(taskInfo.history)
+        if (!askUserPrompt) {
+            await ctx.editMessageText(formatMessage('⚠️ This selection is no longer available.'))
+            return
+        }
+
+        const optionIndex = Number.parseInt(value || '', 10)
+        if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= askUserPrompt.options.length) {
+            await ctx.editMessageText(formatMessage('⚠️ Invalid option.'))
+            return
+        }
+
+        const selectedOption = askUserPrompt.options[optionIndex]!
+
+        await ctx.editMessageText(formatMessage(`✅ Selected: ${selectedOption}\nProcessing...`))
+
+        await confirmTask(session.userId, taskId, true, selectedOption)
+        await setActiveTask(chatId, taskId, ctx.from?.username)
+
+        const newMessage = await ctx.api.sendMessage(chatId, 'Processing...')
+        await setLastMessageId(chatId, newMessage.message_id)
+
+        logger.info('TelegramBot', `User ${chatId} selected option ${optionIndex + 1} for task ${taskId}`)
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        const originalText = ctx.callbackQuery?.message?.text
+        logger.error('TelegramBot', `Failed to process option selection: ${errorMessage}`)
+        await ctx.editMessageText(originalText ? `${originalText.slice(0, 4000)}\n\n❌ Failed to process selection: ${errorMessage}` : `Failed to process selection: ${errorMessage}`)
         await clearActiveTask(chatId)
     }
 }

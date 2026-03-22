@@ -51,33 +51,68 @@ export const toolHandlers: Record<string, (args: Record<string, unknown>, userId
     ...systemToolHandlers,
 }
 
-const mcpToolCache: Tool[] = []
+let mcpToolCache: Tool[] | null = null
 const mcpToolHandlers: Map<string, string> = new Map()
+let mcpToolLoadPromise: Promise<Tool[]> | null = null
 
-export async function loadMCPTools(): Promise<Tool[]> {
-    const enabledServers = getEnabledMCPServers()
+function dedupeTools(tools: Tool[]): Tool[] {
+    const dedupedTools = new Map<string, Tool>()
 
-    for (const serverConfig of enabledServers) {
-        try {
-            const mcpClient = await getMCPClient(serverConfig)
-            const result = await mcpClient.listTools()
-
-            for (const tool of result.tools) {
-                const adaptedTool = convertMCPToolToTool(tool, serverConfig.name)
-                mcpToolCache.push(adaptedTool)
-                mcpToolHandlers.set(adaptedTool.name, serverConfig.name)
-            }
-        } catch (error) {
-            console.error(`Failed to load tools from MCP server ${serverConfig.name}:`, error)
+    for (const tool of tools) {
+        if (!dedupedTools.has(tool.name)) {
+            dedupedTools.set(tool.name, tool)
         }
     }
 
-    return mcpToolCache
+    return Array.from(dedupedTools.values())
+}
+
+export async function loadMCPTools(): Promise<Tool[]> {
+    if (mcpToolCache) {
+        return mcpToolCache
+    }
+
+    if (!mcpToolLoadPromise) {
+        mcpToolLoadPromise = (async () => {
+            const enabledServers = getEnabledMCPServers()
+            const loadedTools: Tool[] = []
+            const nextHandlers = new Map<string, string>()
+
+            for (const serverConfig of enabledServers) {
+                try {
+                    const mcpClient = await getMCPClient(serverConfig)
+                    const result = await mcpClient.listTools()
+
+                    for (const tool of result.tools) {
+                        const adaptedTool = convertMCPToolToTool(tool, serverConfig.name)
+                        if (!nextHandlers.has(adaptedTool.name)) {
+                            loadedTools.push(adaptedTool)
+                            nextHandlers.set(adaptedTool.name, serverConfig.name)
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Failed to load tools from MCP server ${serverConfig.name}:`, error)
+                }
+            }
+
+            mcpToolHandlers.clear()
+            for (const [toolName, serverName] of nextHandlers.entries()) {
+                mcpToolHandlers.set(toolName, serverName)
+            }
+
+            mcpToolCache = loadedTools
+            return loadedTools
+        })().finally(() => {
+            mcpToolLoadPromise = null
+        })
+    }
+
+    return mcpToolLoadPromise
 }
 
 export async function getAllToolsIncludingMCP(): Promise<Tool[]> {
     const mcpTools = await loadMCPTools()
-    return [...systemTools, ...mcpTools]
+    return dedupeTools([...systemTools, ...mcpTools])
 }
 
 export async function getMCPToolHandler(
@@ -130,7 +165,7 @@ export async function getToolByName(name: string): Promise<Tool | undefined> {
         return systemTool
     }
 
-    return mcpToolCache.find((t) => t.name === name)
+    return (mcpToolCache || []).find((t) => t.name === name)
 }
 
 export async function validateToolCall(toolName: string, args: Record<string, unknown>): Promise<{ valid: boolean; error?: string }> {

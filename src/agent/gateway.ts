@@ -244,6 +244,7 @@ export async function stopTask(
     }
 
     await updateTaskRecord(taskId, {
-        status: AgentStatus.Error,
+        status: AgentStatus.Cancelled,
+        requiresConfirmation: false,
     })
 }

@@ -33,6 +33,25 @@ export async function initializeFTS(): Promise<void> {
                     VALUES (NEW.content, NEW."taskRecordId", NEW.role);
                 END
             `
+
+            const historyCountResult = await prisma.$queryRaw<{ count: number }[]>`
+                SELECT COUNT(*) as count FROM "TaskHistory"
+            `
+            const ftsCountResult = await prisma.$queryRaw<{ count: number }[]>`
+                SELECT COUNT(*) as count FROM task_history_fts
+            `
+            const historyCount = historyCountResult[0]?.count ?? 0
+            const ftsCount = ftsCountResult[0]?.count ?? 0
+
+            if (historyCount > 0 && historyCount !== ftsCount) {
+                await prisma.$executeRaw`
+                    DELETE FROM task_history_fts
+                `
+                await prisma.$executeRaw`
+                    INSERT INTO task_history_fts(content, task_record_id, role)
+                    SELECT content, "taskRecordId", role FROM "TaskHistory"
+                `
+            }
         } else if (provider === 'postgresql') {
             await prisma.$executeRaw`
                 ALTER TABLE "TaskHistory" ADD COLUMN IF NOT EXISTS content_fts tsvector
@@ -282,25 +301,17 @@ export async function searchTaskHistory(
 
         results = await prisma.$queryRaw<HistorySearchResult[]>`
             SELECT 
-                h.task_record_id as "taskRecordId",
+                h."taskRecordId" as "taskRecordId",
                 h.role,
                 h.content,
-                h.created_at as "timestamp"
-            FROM task_history h
-            INNER JOIN task_record t ON h.task_record_id = t.id
-            WHERE t.user_id = ${userId}
+                CAST(strftime('%s', h."createdAt") AS INTEGER) * 1000 as "timestamp"
+            FROM task_history_fts
+            INNER JOIN "TaskHistory" h ON h.rowid = task_history_fts.rowid
+            INNER JOIN "TaskRecord" t ON h."taskRecordId" = t.id
+            WHERE t."userId" = ${userId}
                 AND h.role IN ('user', 'assistant')
-                AND h.id IN (
-                    SELECT id FROM task_history 
-                    WHERE task_record_id = h.task_record_id 
-                    AND rowid = (
-                        SELECT rowid FROM task_history_fts 
-                        WHERE task_history_fts MATCH ${`"${escapedQuery}"`}
-                        AND task_record_id = h.task_record_id
-                        LIMIT 1
-                    )
-                )
-            ORDER BY h.created_at DESC
+                AND task_history_fts MATCH ${`"${escapedQuery}"`}
+            ORDER BY h."createdAt" DESC
             LIMIT ${limit}
         `
     } else {
